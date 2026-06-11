@@ -62,8 +62,8 @@ Korea Investment & Securities Open API integration will need credentials later:
 Recommended local setup for RTX 3070 8GB:
 
 ```powershell
-ollama pull gemma4:e4b
-ollama run gemma4:e4b
+ollama pull gemma4:e2b
+ollama run gemma4:e2b
 ```
 
 Run one sentiment analysis cycle after Phase 1 has collected news:
