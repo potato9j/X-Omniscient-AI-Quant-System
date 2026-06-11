@@ -55,8 +55,13 @@ historical:
   markets:
     - KOSPI
     - KOSDAQ
-  max_pages_per_symbol: 500
-  max_symbols:
+  max_pages_per_symbol: 100
+  max_symbols: 300
+  training_max_symbols: 300
+  training_max_pages_per_symbol: 100
+  on_demand_max_pages_per_symbol: 100
+  sleep_min_seconds: 0.8
+  sleep_max_seconds: 1.6
   request_timeout_seconds: 10
   retry_count: 3
   retry_backoff_seconds: 2.0
