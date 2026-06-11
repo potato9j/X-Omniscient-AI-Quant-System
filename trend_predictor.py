@@ -32,10 +32,15 @@ FEATURE_COLUMNS = [
     "return_3",
     "return_5",
     "volume_change_1",
+    "volume_vs_ma_5",
     "price_vs_ma_3",
     "price_vs_ma_5",
+    "intraday_return",
+    "high_low_range",
+    "volatility_5",
     "sentiment_mean_6h",
     "sentiment_count_6h",
+    "market_code",
 ]
 
 
@@ -160,6 +165,9 @@ def load_price_data(db_path: Path) -> pd.DataFrame:
                 SELECT
                     symbol,
                     trade_date || 'T15:30:00+09:00' AS collected_at,
+                    open_price,
+                    high_price,
+                    low_price,
                     close_price AS current_price,
                     volume
                 FROM ohlcv_daily
@@ -169,23 +177,57 @@ def load_price_data(db_path: Path) -> pd.DataFrame:
             )
             frames.append(daily)
 
-        snapshots = pd.read_sql_query(
+        if table_exists(conn, "price_snapshots"):
+            snapshots = pd.read_sql_query(
+                """
+                SELECT
+                    symbol,
+                    collected_at,
+                    current_price AS open_price,
+                    current_price AS high_price,
+                    current_price AS low_price,
+                    current_price,
+                    volume
+                FROM price_snapshots
+                ORDER BY symbol, collected_at
+                """,
+                conn,
+            )
+            frames.append(snapshots)
+
+    if not frames:
+        return pd.DataFrame(
+            columns=[
+                "symbol",
+                "collected_at",
+                "open_price",
+                "high_price",
+                "low_price",
+                "current_price",
+                "volume",
+            ]
+        )
+    return pd.concat(frames, ignore_index=True)
+
+
+def load_market_data(db_path: Path) -> pd.DataFrame:
+    with sqlite3.connect(db_path) as conn:
+        if not table_exists(conn, "stock_universe"):
+            return pd.DataFrame(columns=["symbol", "market"])
+        return pd.read_sql_query(
             """
-            SELECT symbol, collected_at, current_price, volume
-            FROM price_snapshots
-            ORDER BY symbol, collected_at
+            SELECT symbol, market
+            FROM stock_universe
+            WHERE active = 1
             """,
             conn,
         )
-        frames.append(snapshots)
-
-    if not frames:
-        return pd.DataFrame(columns=["symbol", "collected_at", "current_price", "volume"])
-    return pd.concat(frames, ignore_index=True)
 
 
 def load_sentiment_data(db_path: Path) -> pd.DataFrame:
     with sqlite3.connect(db_path) as conn:
+        if not table_exists(conn, "naver_finance_news"):
+            return pd.DataFrame(columns=["symbol", "collected_at", "sentiment_score"])
         return pd.read_sql_query(
             """
             SELECT symbol, collected_at, sentiment_score
@@ -200,6 +242,9 @@ def load_sentiment_data(db_path: Path) -> pd.DataFrame:
 def add_price_features(price_df: pd.DataFrame) -> pd.DataFrame:
     df = price_df.copy()
     df["collected_at"] = pd.to_datetime(df["collected_at"], utc=True)
+    df["open_price"] = pd.to_numeric(df["open_price"], errors="coerce")
+    df["high_price"] = pd.to_numeric(df["high_price"], errors="coerce")
+    df["low_price"] = pd.to_numeric(df["low_price"], errors="coerce")
     df["current_price"] = pd.to_numeric(df["current_price"], errors="coerce")
     df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
     df = df.sort_values(["symbol", "collected_at"])
@@ -211,9 +256,28 @@ def add_price_features(price_df: pd.DataFrame) -> pd.DataFrame:
     df["volume_change_1"] = grouped["volume"].pct_change(1)
     df["ma_3"] = grouped["current_price"].rolling(3).mean().reset_index(level=0, drop=True)
     df["ma_5"] = grouped["current_price"].rolling(5).mean().reset_index(level=0, drop=True)
+    df["volume_ma_5"] = grouped["volume"].rolling(5).mean().reset_index(level=0, drop=True)
     df["price_vs_ma_3"] = (df["current_price"] / df["ma_3"]) - 1.0
     df["price_vs_ma_5"] = (df["current_price"] / df["ma_5"]) - 1.0
+    df["volume_vs_ma_5"] = (df["volume"] / df["volume_ma_5"]) - 1.0
+    df["intraday_return"] = (df["current_price"] / df["open_price"]) - 1.0
+    df["high_low_range"] = (df["high_price"] - df["low_price"]) / df["current_price"]
+    df["volatility_5"] = grouped["return_1"].rolling(5).std().reset_index(level=0, drop=True)
     return df
+
+
+def add_market_features(price_df: pd.DataFrame, market_df: pd.DataFrame) -> pd.DataFrame:
+    df = price_df.copy()
+    df["market_code"] = -1.0
+    if market_df.empty:
+        return df
+
+    market_map = {"KOSPI": 0.0, "KOSDAQ": 1.0}
+    market = market_df.copy()
+    market["market_code"] = market["market"].map(market_map).fillna(-1.0)
+    return df.merge(market[["symbol", "market_code"]], on="symbol", how="left").assign(
+        market_code=lambda data: data["market_code_y"].fillna(data["market_code_x"])
+    ).drop(columns=["market_code_x", "market_code_y"])
 
 
 def add_sentiment_features(price_df: pd.DataFrame, sentiment_df: pd.DataFrame) -> pd.DataFrame:
@@ -248,19 +312,28 @@ def add_sentiment_features(price_df: pd.DataFrame, sentiment_df: pd.DataFrame) -
     return df
 
 
+def sanitize_features(df: pd.DataFrame) -> pd.DataFrame:
+    sanitized = df.copy()
+    present_columns = [column for column in FEATURE_COLUMNS if column in sanitized.columns]
+    sanitized[present_columns] = sanitized[present_columns].replace([np.inf, -np.inf], np.nan)
+    return sanitized
+
+
 def build_training_frame(config: PredictionConfig) -> pd.DataFrame:
     price_df = load_price_data(config.db_path)
+    market_df = load_market_data(config.db_path)
     sentiment_df = load_sentiment_data(config.db_path)
     if price_df.empty:
         return pd.DataFrame()
 
     df = add_price_features(price_df)
+    df = add_market_features(df, market_df)
     df = add_sentiment_features(df, sentiment_df)
     grouped = df.groupby("symbol", group_keys=False)
     df["future_price"] = grouped["current_price"].shift(-config.horizon_steps)
     df["target_up"] = (df["future_price"] > df["current_price"]).astype(int)
     df = df.dropna(subset=["future_price"])
-    return df
+    return sanitize_features(df)
 
 
 def train_model(config: PredictionConfig) -> dict[str, Any]:
@@ -351,11 +424,14 @@ def load_model_artifact(model_path: Path) -> dict[str, Any]:
 
 def latest_feature_rows(config: PredictionConfig) -> pd.DataFrame:
     price_df = load_price_data(config.db_path)
+    market_df = load_market_data(config.db_path)
     sentiment_df = load_sentiment_data(config.db_path)
     if price_df.empty:
         return pd.DataFrame()
     df = add_price_features(price_df)
+    df = add_market_features(df, market_df)
     df = add_sentiment_features(df, sentiment_df)
+    df = sanitize_features(df)
     return df.sort_values("collected_at").groupby("symbol", as_index=False).tail(1)
 
 
