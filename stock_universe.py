@@ -37,6 +37,7 @@ class StockSymbol:
     symbol: str
     name: str
     market: str
+    market_rank: int | None = None
 
 
 @dataclass(frozen=True)
@@ -172,12 +173,19 @@ def init_db(db_path: Path) -> None:
                 market TEXT NOT NULL,
                 source TEXT NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1,
+                market_rank INTEGER,
                 last_seen_at TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(stock_universe)").fetchall()
+        }
+        if "market_rank" not in columns:
+            conn.execute("ALTER TABLE stock_universe ADD COLUMN market_rank INTEGER")
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_stock_universe_market
@@ -186,7 +194,11 @@ def init_db(db_path: Path) -> None:
         )
 
 
-def parse_symbols_from_market_page(market: str, soup: BeautifulSoup) -> list[StockSymbol]:
+def parse_symbols_from_market_page(
+    market: str,
+    soup: BeautifulSoup,
+    page: int,
+) -> list[StockSymbol]:
     symbols: dict[str, StockSymbol] = {}
     for link in soup.select("a[href*='/item/main.naver?code=']"):
         href = urljoin(NAVER_FINANCE_BASE, link.get("href", ""))
@@ -197,7 +209,13 @@ def parse_symbols_from_market_page(market: str, soup: BeautifulSoup) -> list[Sto
         name = link.get_text(" ", strip=True)
         if not name:
             continue
-        symbols[code] = StockSymbol(symbol=code, name=name, market=market)
+        market_rank = ((page - 1) * 50) + len(symbols) + 1
+        symbols[code] = StockSymbol(
+            symbol=code,
+            name=name,
+            market=market,
+            market_rank=market_rank,
+        )
     return list(symbols.values())
 
 
@@ -213,7 +231,7 @@ def fetch_market_symbols(
     for page in range(1, config.max_pages_per_market + 1):
         url = f"{NAVER_FINANCE_BASE}/sise/sise_market_sum.naver?sosok={sosok}&page={page}"
         soup = fetch_soup(session, url, config)
-        page_symbols = parse_symbols_from_market_page(market, soup)
+        page_symbols = parse_symbols_from_market_page(market, soup, page)
         if not page_symbols:
             empty_pages += 1
             if empty_pages >= 2:
@@ -244,18 +262,27 @@ def save_universe_symbols(db_path: Path, symbols: list[StockSymbol]) -> int:
                     market,
                     source,
                     active,
+                    market_rank,
                     last_seen_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, 'naver_market_sum', 1, ?, ?)
+                VALUES (?, ?, ?, 'naver_market_sum', 1, ?, ?, ?)
                 ON CONFLICT(symbol) DO UPDATE SET
                     name = excluded.name,
                     market = excluded.market,
                     active = 1,
+                    market_rank = excluded.market_rank,
                     last_seen_at = excluded.last_seen_at,
                     updated_at = excluded.updated_at
                 """,
-                (symbol.symbol, symbol.name, symbol.market, seen_at, seen_at),
+                (
+                    symbol.symbol,
+                    symbol.name,
+                    symbol.market,
+                    symbol.market_rank,
+                    seen_at,
+                    seen_at,
+                ),
             )
             saved += 1
     return saved
@@ -284,11 +311,14 @@ def load_symbols_from_db(
     init_db(db_path)
     placeholders = ",".join("?" for _ in markets)
     query = f"""
-        SELECT symbol, name, market
+        SELECT symbol, name, market, market_rank
         FROM stock_universe
         WHERE active = 1
           AND market IN ({placeholders})
-        ORDER BY CASE market WHEN 'KOSPI' THEN 0 WHEN 'KOSDAQ' THEN 1 ELSE 2 END, symbol
+        ORDER BY
+            CASE market WHEN 'KOSPI' THEN 0 WHEN 'KOSDAQ' THEN 1 ELSE 2 END,
+            COALESCE(market_rank, 999999),
+            symbol
     """
     params: list[Any] = list(markets)
     if max_symbols is not None:
@@ -299,7 +329,12 @@ def load_symbols_from_db(
         rows = conn.execute(query, params).fetchall()
 
     return [
-        StockSymbol(symbol=str(row[0]), name=str(row[1]), market=str(row[2]))
+        StockSymbol(
+            symbol=str(row[0]),
+            name=str(row[1]),
+            market=str(row[2]),
+            market_rank=int(row[3]) if row[3] is not None else None,
+        )
         for row in rows
     ]
 
