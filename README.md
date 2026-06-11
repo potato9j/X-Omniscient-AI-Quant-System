@@ -90,6 +90,12 @@ The analyzer reads pending rows from `naver_finance_news`, calls the configured 
 
 The first prediction engine is a lightweight CPU-friendly scikit-learn model. It trains on collected price snapshots and Gemma sentiment scores, then writes prediction rows to SQLite.
 
+Backfill historical daily OHLCV before training the release model:
+
+```powershell
+python historical_backfill.py --config config.yaml
+```
+
 Train once:
 
 ```powershell
