@@ -50,3 +50,9 @@ prediction:
   min_training_rows: 50
   test_size: 0.2
   random_state: 42
+
+historical:
+  max_pages_per_symbol: 500
+  request_timeout_seconds: 10
+  retry_count: 3
+  retry_backoff_seconds: 2.0
