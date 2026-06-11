@@ -85,3 +85,27 @@ The analyzer reads pending rows from `naver_finance_news`, calls the configured 
 - `event_tags`
 - `analyzed_at`
 - `llm_model`
+
+## Phase 3 Trend Prediction
+
+The first prediction engine is a lightweight CPU-friendly scikit-learn model. It trains on collected price snapshots and Gemma sentiment scores, then writes prediction rows to SQLite.
+
+Train once:
+
+```powershell
+python trend_predictor.py --train --config config.yaml
+```
+
+Predict with the latest saved model:
+
+```powershell
+python trend_predictor.py --predict --config config.yaml
+```
+
+Run as a background trainer:
+
+```powershell
+python trend_predictor.py --daemon --config config.yaml
+```
+
+In the final packaged app, these commands will be started internally by the EXE. End users should only open the app normally.
