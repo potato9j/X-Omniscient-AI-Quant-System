@@ -85,7 +85,7 @@ def load_config(config_path: Path) -> SentimentConfig:
         llm=LlmConfig(
             provider=str(llm.get("provider", "ollama")).strip().lower(),
             base_url=str(llm.get("base_url", "http://localhost:11434")).rstrip("/"),
-            model=str(llm.get("model", "gemma4:e4b")),
+            model=str(llm.get("model", "gemma4:e2b")),
             timeout_seconds=require_positive_int(llm.get("timeout_seconds", 120), "llm.timeout_seconds"),
             temperature=float(llm.get("temperature", 0.0)),
             num_ctx=require_positive_int(llm.get("num_ctx", 4096), "llm.num_ctx"),
@@ -244,6 +244,7 @@ def call_ollama(prompt: str, config: LlmConfig) -> str:
             "model": config.model,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
+            "think": False,
             "options": {
                 "temperature": config.temperature,
                 "num_ctx": config.num_ctx,
