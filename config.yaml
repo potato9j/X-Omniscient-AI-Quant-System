@@ -52,7 +52,20 @@ prediction:
   random_state: 42
 
 historical:
+  markets:
+    - KOSPI
+    - KOSDAQ
   max_pages_per_symbol: 500
+  max_symbols:
+  request_timeout_seconds: 10
+  retry_count: 3
+  retry_backoff_seconds: 2.0
+
+universe:
+  markets:
+    - KOSPI
+    - KOSDAQ
+  max_pages_per_market: 80
   request_timeout_seconds: 10
   retry_count: 3
   retry_backoff_seconds: 2.0
