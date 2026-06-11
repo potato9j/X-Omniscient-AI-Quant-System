@@ -1,0 +1,28 @@
+database:
+  path: data/omniscient_quant.sqlite3
+
+logging:
+  path: logs/collector.log
+
+collection:
+  price_interval_seconds: 60
+  news_interval_seconds: 600
+  request_timeout_seconds: 10
+  retry_count: 3
+  retry_backoff_seconds: 2.0
+  news_pages: 1
+  skip_price_collection_outside_market: false
+
+stocks:
+  - symbol: "005930"
+    name: "Samsung Electronics"
+  - symbol: "000660"
+    name: "SK hynix"
+  - symbol: "035420"
+    name: "NAVER"
+
+indices:
+  - code: "KOSPI"
+    name: "KOSPI"
+  - code: "KOSDAQ"
+    name: "KOSDAQ"
