@@ -172,6 +172,10 @@ def digits_to_int(value: str | None) -> int | None:
     return int(digits) if digits else None
 
 
+def now_iso() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
 def fetch_soup(session: requests.Session, url: str, config: BackfillConfig) -> BeautifulSoup:
     last_error: Exception | None = None
     for attempt in range(1, config.retry_count + 1):
@@ -223,6 +227,94 @@ def init_db(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_ohlcv_symbol_trade_date
             ON ohlcv_daily(symbol, trade_date)
             """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ohlcv_backfill_status (
+                symbol TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                pages_attempted INTEGER NOT NULL DEFAULT 0,
+                fetched_rows INTEGER NOT NULL DEFAULT 0,
+                inserted_rows INTEGER NOT NULL DEFAULT 0,
+                error TEXT
+            )
+            """
+        )
+
+
+def count_symbol_rows(db_path: Path, symbol: str) -> int:
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM ohlcv_daily WHERE symbol = ?",
+            (symbol,),
+        ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def load_backfill_status(db_path: Path, symbol: str) -> str | None:
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT status FROM ohlcv_backfill_status WHERE symbol = ?",
+            (symbol,),
+        ).fetchone()
+    return str(row[0]) if row else None
+
+
+def should_skip_symbol(db_path: Path, symbol: str, config: BackfillConfig) -> bool:
+    status = load_backfill_status(db_path, symbol)
+    if status == "completed":
+        return True
+    return count_symbol_rows(db_path, symbol) >= config.max_pages_per_symbol * 10
+
+
+def mark_backfill_status(
+    db_path: Path,
+    symbol: str,
+    status: str,
+    pages_attempted: int,
+    fetched_rows: int,
+    inserted_rows: int,
+    error: str | None = None,
+) -> None:
+    completed_at = now_iso() if status == "completed" else None
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO ohlcv_backfill_status (
+                symbol,
+                status,
+                started_at,
+                updated_at,
+                completed_at,
+                pages_attempted,
+                fetched_rows,
+                inserted_rows,
+                error
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol) DO UPDATE SET
+                status = excluded.status,
+                updated_at = excluded.updated_at,
+                completed_at = COALESCE(excluded.completed_at, ohlcv_backfill_status.completed_at),
+                pages_attempted = excluded.pages_attempted,
+                fetched_rows = excluded.fetched_rows,
+                inserted_rows = excluded.inserted_rows,
+                error = excluded.error
+            """,
+            (
+                symbol,
+                status,
+                now_iso(),
+                now_iso(),
+                completed_at,
+                pages_attempted,
+                fetched_rows,
+                inserted_rows,
+                error,
+            ),
         )
 
 
@@ -306,8 +398,11 @@ def backfill_symbol(symbol: str, session: requests.Session, config: BackfillConf
     fetched_total = 0
     inserted_total = 0
     empty_pages = 0
+    last_page = 0
+    mark_backfill_status(config.db_path, symbol, "running", 0, 0, 0)
 
     for page in range(1, config.max_pages_per_symbol + 1):
+        last_page = page
         rows = fetch_daily_page(symbol, page, session, config)
         if not rows:
             empty_pages += 1
@@ -327,19 +422,68 @@ def backfill_symbol(symbol: str, session: requests.Session, config: BackfillConf
                 fetched_total,
                 inserted_total,
             )
+            mark_backfill_status(
+                config.db_path,
+                symbol,
+                "running",
+                page,
+                fetched_total,
+                inserted_total,
+            )
         time.sleep(0.15)
 
+    mark_backfill_status(
+        config.db_path,
+        symbol,
+        "completed",
+        last_page,
+        fetched_total,
+        inserted_total,
+    )
     return {"fetched": fetched_total, "inserted": inserted_total}
 
 
-def backfill_all(config: BackfillConfig) -> dict[str, dict[str, int]]:
+def backfill_all(
+    config: BackfillConfig,
+    skip_completed: bool = True,
+    max_runtime_seconds: int | None = None,
+) -> dict[str, dict[str, Any]]:
     init_db(config.db_path)
     session = create_session()
-    results: dict[str, dict[str, int]] = {}
+    results: dict[str, dict[str, Any]] = {}
+    deadline = time.monotonic() + max_runtime_seconds if max_runtime_seconds else None
 
     for stock in config.stocks:
+        if deadline and time.monotonic() >= deadline:
+            logging.info("backfill_runtime_limit_reached seconds=%s", max_runtime_seconds)
+            break
+
+        if skip_completed and should_skip_symbol(config.db_path, stock.symbol, config):
+            logging.info("backfill_skip_completed symbol=%s name=%s", stock.symbol, stock.name)
+            results[stock.symbol] = {
+                "skipped": True,
+                "reason": "already completed",
+                "rows": count_symbol_rows(config.db_path, stock.symbol),
+            }
+            continue
+
         logging.info("backfill_start symbol=%s name=%s", stock.symbol, stock.name)
-        result = backfill_symbol(stock.symbol, session, config)
+        try:
+            result = backfill_symbol(stock.symbol, session, config)
+        except Exception as exc:
+            logging.exception("backfill_failed symbol=%s error=%s", stock.symbol, exc)
+            mark_backfill_status(
+                config.db_path,
+                stock.symbol,
+                "failed",
+                0,
+                0,
+                0,
+                error=str(exc),
+            )
+            results[stock.symbol] = {"failed": True, "error": str(exc)}
+            continue
+
         results[stock.symbol] = result
         logging.info(
             "backfill_done symbol=%s fetched=%s inserted=%s",
@@ -400,6 +544,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--symbol", help="Optional single symbol override")
     parser.add_argument("--all-symbols", action="store_true", help="Backfill all active symbols in stock_universe")
     parser.add_argument("--refresh-universe", action="store_true", help="Refresh KOSPI/KOSDAQ universe before backfill")
+    parser.add_argument("--no-skip-completed", action="store_true", help="Re-fetch symbols even when marked completed")
+    parser.add_argument("--max-runtime-seconds", type=int, help="Stop gracefully after this many seconds")
     return parser.parse_args()
 
 
@@ -423,7 +569,13 @@ def main() -> None:
     if args.all_symbols:
         config = config_with_universe_stocks(config, args.config, args.refresh_universe)
         logging.info("all_symbols_backfill_enabled symbols=%s", len(config.stocks))
-    print(backfill_all(config))
+    print(
+        backfill_all(
+            config,
+            skip_completed=not args.no_skip_completed,
+            max_runtime_seconds=args.max_runtime_seconds,
+        )
+    )
 
 
 if __name__ == "__main__":
