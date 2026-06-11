@@ -96,6 +96,13 @@ Backfill historical daily OHLCV before training the release model:
 python historical_backfill.py --config config.yaml
 ```
 
+For a release-grade base model, refresh the full KOSPI/KOSDAQ universe and backfill all active symbols:
+
+```powershell
+python stock_universe.py --config config.yaml
+python historical_backfill.py --all-symbols --config config.yaml
+```
+
 Train once:
 
 ```powershell
