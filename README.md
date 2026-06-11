@@ -9,6 +9,8 @@ Phase 1 is in progress and currently provides a production-oriented Naver Financ
 - Multiple KRX stock price and volume collection
 - KOSPI/KOSDAQ index collection
 - Naver Finance news collection
+- KOSPI/KOSDAQ stock universe refresh
+- Historical daily OHLCV backfill for all active symbols
 - SQLite persistence
 - Config-driven scheduler
 - Retry and rotating file logs
@@ -120,5 +122,17 @@ Run as a background trainer:
 ```powershell
 python trend_predictor.py --daemon --config config.yaml
 ```
+
+Create a distributable model package for GitHub Releases:
+
+```powershell
+python model_release.py --config config.yaml
+```
+
+The release package is written under `models/releases/` and contains:
+
+- `predictor_latest.joblib`
+- `metadata.json`
+- `manifest.json` with artifact hashes and feature schema version
 
 In the final packaged app, these commands will be started internally by the EXE. End users should only open the app normally.
