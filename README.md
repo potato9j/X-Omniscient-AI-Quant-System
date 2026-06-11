@@ -56,3 +56,32 @@ Korea Investment & Securities Open API integration will need credentials later:
 - `KIS_APP_KEY`
 - `KIS_APP_SECRET`
 - account/product settings depending on the selected endpoint
+
+## Phase 2 Gemma Sentiment Analysis
+
+Recommended local setup for RTX 3070 8GB:
+
+```powershell
+ollama pull gemma4:e4b
+ollama run gemma4:e4b
+```
+
+Run one sentiment analysis cycle after Phase 1 has collected news:
+
+```powershell
+python sentiment_analyzer.py --once --config config.yaml
+```
+
+Run as a scheduler:
+
+```powershell
+python sentiment_analyzer.py --config config.yaml
+```
+
+The analyzer reads pending rows from `naver_finance_news`, calls the configured local LLM, and updates:
+
+- `sentiment_score`
+- `ai_summary`
+- `event_tags`
+- `analyzed_at`
+- `llm_model`
