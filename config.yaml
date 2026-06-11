@@ -30,7 +30,7 @@ indices:
 llm:
   provider: "ollama"
   base_url: "http://localhost:11434"
-  model: "gemma4:e4b"
+  model: "gemma4:e2b"
   timeout_seconds: 120
   temperature: 0.0
   num_ctx: 4096
