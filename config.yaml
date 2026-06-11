@@ -41,3 +41,12 @@ sentiment:
   interval_seconds: 600
   max_items_per_cycle: 20
   max_title_chars: 240
+
+prediction:
+  model_path: models/predictor_latest.joblib
+  metadata_path: models/metadata.json
+  retrain_interval_seconds: 1800
+  horizon_steps: 5
+  min_training_rows: 50
+  test_size: 0.2
+  random_state: 42
