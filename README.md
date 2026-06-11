@@ -105,6 +105,12 @@ python stock_universe.py --config config.yaml
 python historical_backfill.py --all-symbols --config config.yaml
 ```
 
+For long-running backfills, use a runtime limit and rerun the same command. Completed symbols are tracked in SQLite and skipped automatically:
+
+```powershell
+python historical_backfill.py --all-symbols --config config.yaml --max-runtime-seconds 28800
+```
+
 Train once:
 
 ```powershell
