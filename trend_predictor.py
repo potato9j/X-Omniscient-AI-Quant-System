@@ -141,9 +141,35 @@ def ensure_prediction_table(db_path: Path) -> None:
         )
 
 
+def table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        is not None
+    )
+
+
 def load_price_data(db_path: Path) -> pd.DataFrame:
     with sqlite3.connect(db_path) as conn:
-        return pd.read_sql_query(
+        frames: list[pd.DataFrame] = []
+        if table_exists(conn, "ohlcv_daily"):
+            daily = pd.read_sql_query(
+                """
+                SELECT
+                    symbol,
+                    trade_date || 'T15:30:00+09:00' AS collected_at,
+                    close_price AS current_price,
+                    volume
+                FROM ohlcv_daily
+                ORDER BY symbol, trade_date
+                """,
+                conn,
+            )
+            frames.append(daily)
+
+        snapshots = pd.read_sql_query(
             """
             SELECT symbol, collected_at, current_price, volume
             FROM price_snapshots
@@ -151,6 +177,11 @@ def load_price_data(db_path: Path) -> pd.DataFrame:
             """,
             conn,
         )
+        frames.append(snapshots)
+
+    if not frames:
+        return pd.DataFrame(columns=["symbol", "collected_at", "current_price", "volume"])
+    return pd.concat(frames, ignore_index=True)
 
 
 def load_sentiment_data(db_path: Path) -> pd.DataFrame:
