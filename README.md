@@ -10,7 +10,8 @@ Phase 1 is in progress and currently provides a production-oriented Naver Financ
 - KOSPI/KOSDAQ index collection
 - Naver Finance news collection
 - KOSPI/KOSDAQ stock universe refresh
-- Historical daily OHLCV backfill for all active symbols
+- Historical daily OHLCV backfill for representative training samples
+- On-demand historical backfill for searched symbols
 - SQLite persistence
 - Config-driven scheduler
 - Retry and rotating file logs
@@ -98,17 +99,29 @@ Backfill historical daily OHLCV before training the release model:
 python historical_backfill.py --config config.yaml
 ```
 
-For a release-grade base model, refresh the full KOSPI/KOSDAQ universe and backfill all active symbols:
+For a release-grade base model, refresh the KOSPI/KOSDAQ universe and backfill only a representative training sample:
 
 ```powershell
 python stock_universe.py --config config.yaml
-python historical_backfill.py --all-symbols --config config.yaml
+python historical_backfill.py --all-symbols --training-sample --config config.yaml
 ```
 
-For long-running backfills, use a runtime limit and rerun the same command. Completed symbols are tracked in SQLite and skipped automatically:
+For long-running sample backfills, use a runtime limit and rerun the same command. Completed symbols are tracked in SQLite and skipped automatically:
 
 ```powershell
-python historical_backfill.py --all-symbols --config config.yaml --max-runtime-seconds 28800
+python historical_backfill.py --all-symbols --training-sample --config config.yaml --max-runtime-seconds 28800
+```
+
+Watch numeric progress in another terminal:
+
+```powershell
+python backfill_status.py --config config.yaml --watch 10
+```
+
+When a user searches a specific stock in the final app, the app should run an on-demand history fill for that symbol instead of preloading every KRX stock upfront:
+
+```powershell
+python historical_backfill.py --symbol 005930 --on-demand --config config.yaml
 ```
 
 Train once:
