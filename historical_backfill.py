@@ -16,6 +16,12 @@ import requests
 import yaml
 from bs4 import BeautifulSoup
 
+from stock_universe import (
+    load_config as load_universe_config,
+    load_symbols_from_db,
+    refresh_universe,
+)
+
 
 NAVER_FINANCE_BASE = "https://finance.naver.com"
 DEFAULT_CONFIG_PATH = Path("config.yaml")
@@ -38,6 +44,8 @@ class BackfillConfig:
     db_path: Path
     log_path: Path
     stocks: tuple[StockTarget, ...]
+    markets: tuple[str, ...]
+    max_symbols: int | None
     max_pages_per_symbol: int
     request_timeout_seconds: int
     retry_count: int
@@ -73,6 +81,21 @@ def normalize_stock_target(item: Any) -> StockTarget:
     raise ValueError(f"Invalid stock target: {item!r}")
 
 
+def normalize_markets(raw_markets: Any) -> tuple[str, ...]:
+    if not raw_markets:
+        return ("KOSPI", "KOSDAQ")
+    return tuple(str(market).strip().upper() for market in raw_markets)
+
+
+def optional_positive_int(value: Any, name: str) -> int | None:
+    if value is None:
+        return None
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError(f"{name} must be greater than 0 when set")
+    return parsed
+
+
 def load_config(config_path: Path) -> BackfillConfig:
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     database = raw.get("database", {})
@@ -88,6 +111,8 @@ def load_config(config_path: Path) -> BackfillConfig:
         db_path=Path(database.get("path", DEFAULT_DB_PATH)),
         log_path=Path(logging_config.get("backfill_path", DEFAULT_LOG_PATH)),
         stocks=stocks,
+        markets=normalize_markets(historical.get("markets", ["KOSPI", "KOSDAQ"])),
+        max_symbols=optional_positive_int(historical.get("max_symbols"), "historical.max_symbols"),
         max_pages_per_symbol=require_positive_int(
             historical.get("max_pages_per_symbol", 500),
             "historical.max_pages_per_symbol",
@@ -326,12 +351,55 @@ def backfill_all(config: BackfillConfig) -> dict[str, dict[str, int]]:
     return results
 
 
+def config_with_universe_stocks(
+    config: BackfillConfig,
+    config_path: Path,
+    refresh: bool,
+) -> BackfillConfig:
+    if refresh:
+        universe_config = load_universe_config(config_path)
+        refresh_universe(universe_config)
+
+    symbols = load_symbols_from_db(
+        config.db_path,
+        markets=config.markets,
+        max_symbols=config.max_symbols,
+    )
+    if not symbols:
+        universe_config = load_universe_config(config_path)
+        refresh_universe(universe_config)
+        symbols = load_symbols_from_db(
+            config.db_path,
+            markets=config.markets,
+            max_symbols=config.max_symbols,
+        )
+    if not symbols:
+        raise RuntimeError("No symbols found in stock_universe")
+
+    return BackfillConfig(
+        db_path=config.db_path,
+        log_path=config.log_path,
+        stocks=tuple(
+            StockTarget(symbol=symbol.symbol, name=f"{symbol.name} ({symbol.market})")
+            for symbol in symbols
+        ),
+        markets=config.markets,
+        max_symbols=config.max_symbols,
+        max_pages_per_symbol=config.max_pages_per_symbol,
+        request_timeout_seconds=config.request_timeout_seconds,
+        retry_count=config.retry_count,
+        retry_backoff_seconds=config.retry_backoff_seconds,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Historical OHLCV backfill for Omniscient AI Quant System"
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--symbol", help="Optional single symbol override")
+    parser.add_argument("--all-symbols", action="store_true", help="Backfill all active symbols in stock_universe")
+    parser.add_argument("--refresh-universe", action="store_true", help="Refresh KOSPI/KOSDAQ universe before backfill")
     return parser.parse_args()
 
 
@@ -343,6 +411,8 @@ def main() -> None:
             db_path=config.db_path,
             log_path=config.log_path,
             stocks=(StockTarget(symbol=args.symbol),),
+            markets=config.markets,
+            max_symbols=config.max_symbols,
             max_pages_per_symbol=config.max_pages_per_symbol,
             request_timeout_seconds=config.request_timeout_seconds,
             retry_count=config.retry_count,
@@ -350,6 +420,9 @@ def main() -> None:
         )
 
     setup_logging(config.log_path)
+    if args.all_symbols:
+        config = config_with_universe_stocks(config, args.config, args.refresh_universe)
+        logging.info("all_symbols_backfill_enabled symbols=%s", len(config.stocks))
     print(backfill_all(config))
 
 
