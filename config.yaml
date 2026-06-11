@@ -26,3 +26,18 @@ indices:
     name: "KOSPI"
   - code: "KOSDAQ"
     name: "KOSDAQ"
+
+llm:
+  provider: "ollama"
+  base_url: "http://localhost:11434"
+  model: "gemma4:e4b"
+  timeout_seconds: 120
+  temperature: 0.0
+  num_ctx: 4096
+  num_predict: 256
+
+sentiment:
+  batch_size: 1
+  interval_seconds: 600
+  max_items_per_cycle: 20
+  max_title_chars: 240
