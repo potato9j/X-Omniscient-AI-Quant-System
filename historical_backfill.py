@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import random
 import re
 import sqlite3
 import sys
 import time
 from dataclasses import dataclass
+from dataclasses import replace
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -50,6 +52,11 @@ class BackfillConfig:
     request_timeout_seconds: int
     retry_count: int
     retry_backoff_seconds: float
+    sleep_min_seconds: float
+    sleep_max_seconds: float
+    training_max_symbols: int
+    training_max_pages_per_symbol: int
+    on_demand_max_pages_per_symbol: int
 
 
 @dataclass(frozen=True)
@@ -128,6 +135,20 @@ def load_config(config_path: Path) -> BackfillConfig:
         retry_backoff_seconds=float(
             historical.get("retry_backoff_seconds", collection.get("retry_backoff_seconds", 2.0))
         ),
+        sleep_min_seconds=float(historical.get("sleep_min_seconds", 0.8)),
+        sleep_max_seconds=float(historical.get("sleep_max_seconds", 1.6)),
+        training_max_symbols=require_positive_int(
+            historical.get("training_max_symbols", 400),
+            "historical.training_max_symbols",
+        ),
+        training_max_pages_per_symbol=require_positive_int(
+            historical.get("training_max_pages_per_symbol", 120),
+            "historical.training_max_pages_per_symbol",
+        ),
+        on_demand_max_pages_per_symbol=require_positive_int(
+            historical.get("on_demand_max_pages_per_symbol", 120),
+            "historical.on_demand_max_pages_per_symbol",
+        ),
     )
 
 
@@ -163,6 +184,13 @@ def create_session() -> requests.Session:
         }
     )
     return session
+
+
+def validate_sleep_range(config: BackfillConfig) -> None:
+    if config.sleep_min_seconds < 0 or config.sleep_max_seconds < 0:
+        raise ValueError("sleep_min_seconds and sleep_max_seconds must be non-negative")
+    if config.sleep_min_seconds > config.sleep_max_seconds:
+        raise ValueError("sleep_min_seconds must be <= sleep_max_seconds")
 
 
 def digits_to_int(value: str | None) -> int | None:
@@ -430,7 +458,7 @@ def backfill_symbol(symbol: str, session: requests.Session, config: BackfillConf
                 fetched_total,
                 inserted_total,
             )
-        time.sleep(0.15)
+        time.sleep(random.uniform(config.sleep_min_seconds, config.sleep_max_seconds))
 
     mark_backfill_status(
         config.db_path,
@@ -500,23 +528,35 @@ def config_with_universe_stocks(
     config_path: Path,
     refresh: bool,
 ) -> BackfillConfig:
+    def load_target_symbols() -> list[Any]:
+        if config.max_symbols is None or len(config.markets) <= 1:
+            return load_symbols_from_db(
+                config.db_path,
+                markets=config.markets,
+                max_symbols=config.max_symbols,
+            )
+
+        per_market = max(1, (config.max_symbols + len(config.markets) - 1) // len(config.markets))
+        selected = []
+        for market in config.markets:
+            selected.extend(
+                load_symbols_from_db(
+                    config.db_path,
+                    markets=(market,),
+                    max_symbols=per_market,
+                )
+            )
+        return selected[: config.max_symbols]
+
     if refresh:
         universe_config = load_universe_config(config_path)
         refresh_universe(universe_config)
 
-    symbols = load_symbols_from_db(
-        config.db_path,
-        markets=config.markets,
-        max_symbols=config.max_symbols,
-    )
+    symbols = load_target_symbols()
     if not symbols:
         universe_config = load_universe_config(config_path)
         refresh_universe(universe_config)
-        symbols = load_symbols_from_db(
-            config.db_path,
-            markets=config.markets,
-            max_symbols=config.max_symbols,
-        )
+        symbols = load_target_symbols()
     if not symbols:
         raise RuntimeError("No symbols found in stock_universe")
 
@@ -533,6 +573,11 @@ def config_with_universe_stocks(
         request_timeout_seconds=config.request_timeout_seconds,
         retry_count=config.retry_count,
         retry_backoff_seconds=config.retry_backoff_seconds,
+        sleep_min_seconds=config.sleep_min_seconds,
+        sleep_max_seconds=config.sleep_max_seconds,
+        training_max_symbols=config.training_max_symbols,
+        training_max_pages_per_symbol=config.training_max_pages_per_symbol,
+        on_demand_max_pages_per_symbol=config.on_demand_max_pages_per_symbol,
     )
 
 
@@ -546,24 +591,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--refresh-universe", action="store_true", help="Refresh KOSPI/KOSDAQ universe before backfill")
     parser.add_argument("--no-skip-completed", action="store_true", help="Re-fetch symbols even when marked completed")
     parser.add_argument("--max-runtime-seconds", type=int, help="Stop gracefully after this many seconds")
+    parser.add_argument("--training-sample", action="store_true", help="Backfill only a representative training sample")
+    parser.add_argument("--on-demand", action="store_true", help="Backfill one searched symbol using on-demand limits")
+    parser.add_argument("--max-symbols", type=int, help="Override max symbols for this run")
+    parser.add_argument("--max-pages-per-symbol", type=int, help="Override max daily pages per symbol for this run")
+    parser.add_argument("--sleep-min-seconds", type=float, help="Override minimum delay between page requests")
+    parser.add_argument("--sleep-max-seconds", type=float, help="Override maximum delay between page requests")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    if args.symbol:
-        config = BackfillConfig(
-            db_path=config.db_path,
-            log_path=config.log_path,
-            stocks=(StockTarget(symbol=args.symbol),),
-            markets=config.markets,
-            max_symbols=config.max_symbols,
-            max_pages_per_symbol=config.max_pages_per_symbol,
-            request_timeout_seconds=config.request_timeout_seconds,
-            retry_count=config.retry_count,
-            retry_backoff_seconds=config.retry_backoff_seconds,
+    if args.training_sample:
+        config = replace(
+            config,
+            max_symbols=config.training_max_symbols,
+            max_pages_per_symbol=config.training_max_pages_per_symbol,
         )
+    if args.on_demand:
+        if not args.symbol:
+            raise ValueError("--on-demand requires --symbol")
+        config = replace(config, max_pages_per_symbol=config.on_demand_max_pages_per_symbol)
+    if args.max_symbols is not None:
+        config = replace(config, max_symbols=args.max_symbols)
+    if args.max_pages_per_symbol is not None:
+        config = replace(config, max_pages_per_symbol=args.max_pages_per_symbol)
+    if args.sleep_min_seconds is not None:
+        config = replace(config, sleep_min_seconds=args.sleep_min_seconds)
+    if args.sleep_max_seconds is not None:
+        config = replace(config, sleep_max_seconds=args.sleep_max_seconds)
+    validate_sleep_range(config)
+
+    if args.symbol:
+        config = replace(config, stocks=(StockTarget(symbol=args.symbol),))
 
     setup_logging(config.log_path)
     if args.all_symbols:
