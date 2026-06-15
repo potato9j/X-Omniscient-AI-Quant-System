@@ -65,6 +65,10 @@ flowchart LR
     E --> G["Model Release Package\nGitHub Releases"]
 ```
 
+## Main Page IMAGE
+<img width="1125" height="939" alt="Image" src="https://github.com/user-attachments/assets/973e2229-8d27-4c0f-afd6-8e9ac56e9db0" />
+
+
 ## Current Capabilities
 
 | Area | Status | Description |
