@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-16 00:26 KST
+Last updated: 2026-06-16 00:37 KST
 
 This is a short status snapshot. For operational continuation, read
 [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md). For detailed development history,
@@ -47,6 +47,7 @@ Packaging:          not implemented yet
 - Responsive UI pass for desktop, narrow, and portrait viewports.
 - Manual Gemma sentiment trigger and progress counter in the dashboard.
 - Startup loading states and automatic API retry during frontend boot.
+- Local development CORS support for variable Vite ports.
 
 ## Local Artifacts Not Committed
 
