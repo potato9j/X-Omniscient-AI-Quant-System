@@ -1,6 +1,6 @@
 # Omniscient AI Quant System - AI Agent Handoff
 
-Last updated: 2026-06-16 00:17 KST
+Last updated: 2026-06-16 00:26 KST
 
 This is the short operational handoff for continuing the project from any Codex
 session, USB drive, laptop, or desktop. It should stay concise. For detailed
@@ -161,7 +161,9 @@ After a stock search, the UI switches to stock detail mode:
 
 Recent UI work added explicit responsive grid areas, safer chart sizing, better
 portrait/small-screen behavior, more professional product wording, and a manual
-Gemma sentiment trigger for pending news rows.
+Gemma sentiment trigger for pending news rows. The frontend now shows loading
+states and retries initial API bootstrapping so a slow backend start does not
+look like a broken zero-data screen.
 
 ## 9. Verification Commands
 
