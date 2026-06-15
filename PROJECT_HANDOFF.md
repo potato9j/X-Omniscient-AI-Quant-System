@@ -1,6 +1,6 @@
 # Omniscient AI Quant System - AI Agent Handoff
 
-Last updated: 2026-06-16 00:37 KST
+Last updated: 2026-06-16 00:56 KST
 
 This is the short operational handoff for continuing the project from any Codex
 session, USB drive, laptop, or desktop. It should stay concise. For detailed
@@ -36,6 +36,36 @@ is unavailable.
 - Keep local DB, logs, model binaries, and release ZIPs out of Git.
 - Publish model ZIPs through GitHub Releases later.
 - Follow Korean market colors: red for up/good, blue for down/bad.
+- Use external securities APIs only for read-only market data.
+- Do not implement buy, sell, cancel, modify, auto-trading, or account-based order execution features.
+
+## 2.1 Product Boundary
+
+This project is a market-data and AI analysis dashboard, not a trading bot.
+
+Allowed:
+
+- quote lookup;
+- KOSPI/KOSDAQ index lookup;
+- daily and intraday OHLCV collection;
+- volume, turnover, order-book-like market data if available as read-only data;
+- news collection and Gemma sentiment analysis;
+- direction probability prediction;
+- expected return, target price, and prediction range estimation;
+- explanatory investment-support reports.
+
+Excluded:
+
+- buy orders;
+- sell orders;
+- order modification or cancellation;
+- automated trading;
+- order recommendations based on account balance;
+- automatic portfolio rebalancing execution.
+
+When integrating Korea Investment & Securities Open API, use only market-data
+endpoints. Do not add account balance, order availability, order password, or
+trading endpoints.
 
 ## 3. Repository
 
@@ -193,6 +223,7 @@ If that happens, rerun the same build with approved permissions.
 ## 10. Known Limitations
 
 - Current OHLCV data is daily, not true 10-minute intraday data.
+- Korea Investment & Securities Open API is not integrated yet.
 - The 10-minute chart control must remain disabled until intraday collection is implemented.
 - Naver crawling can be blocked or break if HTML changes.
 - Current model is a baseline, not evidence of profitable trading.
@@ -206,18 +237,23 @@ If that happens, rerun the same build with approved permissions.
 - Do not commit `data/`, `logs/`, `models/`, `.deps/`, `.venv/`, `frontend/node_modules/`, or `frontend/dist/`.
 - Do not delete local SQLite DB or model artifacts.
 - Do not hardcode API keys.
+- Do not commit `.env` files, API keys, access tokens, account numbers, or account secrets.
 - Do not fine-tune Gemma.
 - Do not claim real-time 10-minute behavior until intraday data exists.
+- Do not add real-trading order features, even as hidden or experimental code.
+- Do not call order, cancel, modify, account balance, or orderable-cash endpoints.
 
 ## 12. Next Recommended Work
 
 1. Browser-test the responsive frontend at desktop, narrow desktop, portrait, and mobile widths.
 2. Add loading and empty states that look intentional.
-3. Add real intraday OHLCV collection and API endpoints.
-4. Add market-hours-aware refresh logic.
-5. Improve prediction explanation quality and calibration.
-6. Start packaging architecture: Electron shell plus PyInstaller backend service.
-7. Add GitHub Release model updater.
+3. Add a read-only Korea Investment & Securities market-data API connector.
+4. Add `ohlcv_intraday` storage for 1-minute/5-minute/10-minute candles.
+5. Add market-hours-aware refresh logic.
+6. Add expected-return and target-price prediction outputs.
+7. Improve prediction explanation quality and calibration.
+8. Start packaging architecture: Electron shell plus PyInstaller backend service.
+9. Add GitHub Release model updater.
 
 ## 13. Update Rule
 
