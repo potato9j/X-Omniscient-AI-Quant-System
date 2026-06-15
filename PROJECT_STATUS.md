@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-16 00:37 KST
+Last updated: 2026-06-16 00:56 KST
 
 This is a short status snapshot. For operational continuation, read
 [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md). For detailed development history,
@@ -19,6 +19,8 @@ Core strategy:
 - Train the base model with a representative 300-symbol sample.
 - Backfill searched symbols on demand inside the final app.
 - Release trained model packages through GitHub Releases, not normal commits.
+- Use securities APIs only for read-only market data.
+- Exclude all real-trading order, cancel, modify, and auto-trading features.
 
 ## Current Local Snapshot
 
@@ -48,6 +50,7 @@ Packaging:          not implemented yet
 - Manual Gemma sentiment trigger and progress counter in the dashboard.
 - Startup loading states and automatic API retry during frontend boot.
 - Local development CORS support for variable Vite ports.
+- Product boundary fixed as read-only market data and prediction, with no order execution.
 
 ## Local Artifacts Not Committed
 
@@ -93,10 +96,12 @@ check_system.bat
 
 ## Next Steps
 
-1. Add real intraday OHLCV collection.
-2. Add market-hours-aware refresh logic.
-3. Convert manual sentiment analysis into a managed background worker for the final EXE.
-4. Improve prediction validation and calibration.
-5. Improve loading and empty UI states.
-6. Start EXE packaging architecture with Electron plus a Python backend launcher.
-7. Add GitHub Release model updater.
+1. Add a read-only Korea Investment & Securities market-data API connector.
+2. Add real intraday OHLCV collection.
+3. Add expected-return, target-price, and prediction-range outputs.
+4. Add market-hours-aware refresh logic.
+5. Convert manual sentiment analysis into a managed background worker for the final EXE.
+6. Improve prediction validation and calibration.
+7. Improve loading and empty UI states.
+8. Start EXE packaging architecture with Electron plus a Python backend launcher.
+9. Add GitHub Release model updater.
