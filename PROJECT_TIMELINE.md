@@ -2,7 +2,7 @@
 
 This document records the detailed development history of the Omniscient AI Quant System. It is intentionally more granular than `PROJECT_HANDOFF.md` so future reviewers can understand how the project evolved, what failed, and why design or engineering decisions were made.
 
-Last updated: 2026-06-16 00:17 KST
+Last updated: 2026-06-16 00:26 KST
 
 ## Reading Guide
 
@@ -223,6 +223,19 @@ Last updated: 2026-06-16 00:17 KST
 | Error observed | Backend was initially checked on temporary port 8001 after an interrupted long-running `uvicorn` command; the frontend expects port 8000. |
 | Improvement | `run_backend.bat` was changed to use `PYTHONPATH=.;.deps` and no `--reload`, making double-click backend startup more stable on port 8000. |
 
+### v0.6.5 - Startup Loading And API Retry Fix
+
+| Field | Details |
+| --- | --- |
+| Date | 2026-06-16 |
+| Goal | Stop the dashboard from looking broken when the frontend appears before backend data has finished loading. |
+| Problem | The user saw `Failed to fetch`, zero metrics, empty ranking, empty news, and no visible data. The backend later responded normally, but the initial frontend state made the app look nonfunctional. |
+| Work | Added frontend boot loading state, initial API retry loop, loading labels for metrics/ranking/news/signals, and safer sentiment counter fallback. |
+| Files | `frontend/src/App.jsx` |
+| Verification | Browser reload immediately showed `데이터 동기화 중`, `...`, `랭킹 불러오는 중`, `뉴스 불러오는 중`; after about 5 seconds it showed universe `3,948`, OHLCV `360,633`, signals `302`, 30 ranking rows, 12 news cards, and sentiment `2/40`. |
+| Build result | `npm run build` passed after the frontend change. |
+| Improvement | A slow backend start or first failed API call now causes a controlled loading/retry state instead of a misleading zero-data screen. |
+
 ## Error Log
 
 | Date | Error | Cause | Resolution |
@@ -240,6 +253,7 @@ Last updated: 2026-06-16 00:17 KST
 | 2026-06-15 | PowerShell displayed Korean JSX text as mojibake | UTF-8 source was read through a non-UTF-8 console path | Treat `rg`, browser output, and Vite build as authoritative unless the browser also shows broken text |
 | 2026-06-16 | Dashboard did not visibly apply news sentiment | Analyzer existed as a separate script but was not connected to the API/frontend workflow | Added sentiment status/trigger APIs and a frontend analysis action |
 | 2026-06-16 | Backend verification appeared stuck on `uvicorn` | Direct server command is long-running by design and was started on temporary port 8001 | Switched runtime verification back to `run_backend.bat` on port 8000 |
+| 2026-06-16 | Dashboard appeared as zero-data / `Failed to fetch` | Frontend loaded before API data was ready and had no boot retry/loading state | Added initial API retry and explicit loading labels |
 
 ## Design Decision Log
 
