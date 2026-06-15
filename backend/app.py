@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+import sentiment_analyzer
 from .db import connect, database_path, row_to_dict, rows_to_dicts, safe_json_loads, table_exists
 from .schemas import (
     Candle,
@@ -17,6 +21,8 @@ from .schemas import (
     MarketLeaderItem,
     ModelStatus,
     NewsItem,
+    SentimentAnalyzeResponse,
+    SentimentStatus,
     PredictionExplanation,
     PredictionItem,
     StockSearchItem,
@@ -39,6 +45,15 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+_sentiment_job_lock = threading.Lock()
+_sentiment_job_state: dict[str, Any] = {
+    "job_status": "idle",
+    "last_started_at": None,
+    "last_finished_at": None,
+    "last_analyzed_count": 0,
+    "last_error": None,
+}
 
 
 def _count_table(table_name: str) -> int:
@@ -101,6 +116,67 @@ def _latest_ohlcv_cte() -> str:
 
 def _normalize_symbol(symbol: str) -> str:
     return symbol.strip().zfill(6)
+
+
+def _news_sentiment_counts() -> tuple[int, int, int]:
+    with connect() as conn:
+        if not table_exists(conn, "naver_finance_news"):
+            return 0, 0, 0
+        total = int(conn.execute("SELECT COUNT(*) FROM naver_finance_news").fetchone()[0])
+        analyzed = int(
+            conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM naver_finance_news
+                WHERE sentiment_score IS NOT NULL
+                   OR analyzed_at IS NOT NULL
+                """
+            ).fetchone()[0]
+        )
+    return total, analyzed, max(0, total - analyzed)
+
+
+def _sentiment_runtime_config() -> sentiment_analyzer.SentimentConfig:
+    return sentiment_analyzer.load_config(Path("config.yaml"))
+
+
+def _run_sentiment_background(limit: int) -> None:
+    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _sentiment_job_lock:
+        _sentiment_job_state.update(
+            {
+                "job_status": "running",
+                "last_started_at": started_at,
+                "last_finished_at": None,
+                "last_analyzed_count": 0,
+                "last_error": None,
+            }
+        )
+
+    try:
+        config = _sentiment_runtime_config()
+        limited_config = replace(config, max_items_per_cycle=limit)
+        analyzed_count = sentiment_analyzer.analyze_once(limited_config)
+        with _sentiment_job_lock:
+            _sentiment_job_state.update(
+                {
+                    "job_status": "idle",
+                    "last_finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "last_analyzed_count": analyzed_count,
+                    "last_error": None,
+                }
+            )
+    except Exception as exc:  # pragma: no cover - runtime integration guard
+        logging.exception("sentiment background job failed")
+        with _sentiment_job_lock:
+            _sentiment_job_state.update(
+                {
+                    "job_status": "error",
+                    "last_finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "last_analyzed_count": 0,
+                    "last_error": str(exc),
+                }
+            )
 
 
 def _prediction_explanation(item: dict[str, Any]) -> PredictionExplanation:
@@ -206,6 +282,64 @@ def health() -> HealthResponse:
         stock_count=_count_table("stock_universe"),
         ohlcv_rows=_count_table("ohlcv_daily"),
         prediction_rows=_count_table("trend_predictions"),
+    )
+
+
+@app.get("/sentiment/status", response_model=SentimentStatus)
+def sentiment_status() -> SentimentStatus:
+    total, analyzed, pending = _news_sentiment_counts()
+    config = _sentiment_runtime_config()
+    with _sentiment_job_lock:
+        state = dict(_sentiment_job_state)
+    return SentimentStatus(
+        total_news=total,
+        analyzed_news=analyzed,
+        pending_news=pending,
+        provider=config.llm.provider,
+        model=config.llm.model,
+        job_status=state["job_status"],
+        last_started_at=state["last_started_at"],
+        last_finished_at=state["last_finished_at"],
+        last_analyzed_count=state["last_analyzed_count"],
+        last_error=state["last_error"],
+    )
+
+
+@app.post("/sentiment/analyze", response_model=SentimentAnalyzeResponse)
+def start_sentiment_analysis(
+    background_tasks: BackgroundTasks,
+    limit: int = Query(default=5, ge=1, le=20),
+) -> SentimentAnalyzeResponse:
+    _, _, pending = _news_sentiment_counts()
+    if pending <= 0:
+        return SentimentAnalyzeResponse(
+            status="idle",
+            accepted=False,
+            pending_news=0,
+            message="분석 대기 뉴스가 없습니다.",
+        )
+
+    with _sentiment_job_lock:
+        if _sentiment_job_state["job_status"] == "running":
+            return SentimentAnalyzeResponse(
+                status="running",
+                accepted=False,
+                pending_news=pending,
+                message="이미 감성 분석 작업이 실행 중입니다.",
+            )
+        _sentiment_job_state.update(
+            {
+                "job_status": "queued",
+                "last_error": None,
+            }
+        )
+
+    background_tasks.add_task(_run_sentiment_background, min(limit, pending))
+    return SentimentAnalyzeResponse(
+        status="queued",
+        accepted=True,
+        pending_news=pending,
+        message=f"감성 분석 작업을 시작했습니다. 최대 {min(limit, pending)}건을 분석합니다.",
     )
 
 
