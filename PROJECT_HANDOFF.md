@@ -1,541 +1,221 @@
-# Omniscient AI Quant System - Cross-Session Handoff
+# Omniscient AI Quant System - AI Agent Handoff
 
-Last updated: 2026-06-15 19:55 KST
+Last updated: 2026-06-15 23:35 KST
 
-This is the primary handoff document for continuing the project from another Codex session, USB drive, laptop, desktop, or GitHub clone. If the original chat history is missing, read this file first.
+This is the short operational handoff for continuing the project from any Codex
+session, USB drive, laptop, or desktop. It should stay concise. For detailed
+development history, errors, results, and design decisions, read
+[`PROJECT_TIMELINE.md`](PROJECT_TIMELINE.md).
 
-## 1. Project Objective
+## 1. Mission
 
-Build a local-first Windows desktop quant application for Korean stocks.
+Build a local-first Windows quant application for Korean equities.
 
-The final app should:
+The finished app should:
 
-- collect Korean stock price, index, volume, and news data,
-- store data locally in SQLite,
-- analyze news sentiment with local Gemma through Ollama or LM Studio,
-- predict near-term price direction with a lightweight ML model,
-- show a real-time dashboard,
-- package everything as an EXE app,
-- distribute trained model updates through GitHub Releases.
+1. collect Korean market and stock data continuously;
+2. collect related market and stock news;
+3. analyze news sentiment with a local Gemma model through Ollama or LM Studio;
+4. predict stock direction with a lightweight ML model;
+5. show the result in a polished dashboard;
+6. package the system into a user-friendly EXE;
+7. distribute trained model updates through GitHub Releases.
 
-Final users should not type terminal commands. The app must start required local services, check DB/model state, run on-demand backfills, and show progress through the UI.
+Final users should not type terminal commands. The app must start required local
+services, check local data/model state, and degrade gracefully if Ollama or Gemma
+is unavailable.
 
-## 2. Core Decisions Already Made
+## 2. Fixed Direction
 
-- Gemma is not fine-tuned.
-- Gemma is used only for zero-shot news sentiment analysis.
-- Price prediction uses a separate lightweight ML model.
-- Current prediction model is scikit-learn HistGradientBoostingClassifier.
-- Full historical crawling for every KRX stock before release was rejected as too slow and too risky for Naver blocking.
-- Base model training uses a representative 300-symbol sample.
-- Specific searched symbols are prepared later through on-demand backfill.
-- Code is synced to GitHub.
-- DB, logs, and model binaries are not committed.
-- Final trained model ZIPs should be distributed through GitHub Releases.
+- Do not fine-tune Gemma.
+- Use Gemma only for zero-shot news sentiment analysis.
+- Use a lightweight ML model for price prediction.
+- Current predictor family: scikit-learn `HistGradientBoostingClassifier`.
+- Use a representative 300-symbol training sample as the first baseline.
+- Use on-demand backfill when a searched symbol is not ready.
+- Keep local DB, logs, model binaries, and release ZIPs out of Git.
+- Publish model ZIPs through GitHub Releases later.
+- Follow Korean market colors: red for up/good, blue for down/bad.
 
-## 3. Current Overall Status
-
-Product-level completion is about 40%.
-
-Implemented:
-
-- Phase 1 data collector,
-- stock universe refresh,
-- historical OHLCV backfill,
-- backfill status reporting,
-- Gemma sentiment analyzer,
-- lightweight trend predictor,
-- model ZIP packaging,
-- README and status documents.
-
-Not implemented yet:
-
-- FastAPI backend,
-- React/Vue dashboard,
-- Electron/PyInstaller EXE packaging,
-- automatic startup orchestration,
-- GitHub Release model update flow,
-- app-side model download/update.
-
-## 4. Repository And Workspace
-
-GitHub repository:
+## 3. Repository
 
 ```text
-potato9j/X-Omniscient-AI-Quant-System
-https://github.com/potato9j/X-Omniscient-AI-Quant-System
+GitHub:  potato9j/X-Omniscient-AI-Quant-System
+URL:     https://github.com/potato9j/X-Omniscient-AI-Quant-System
+Local:   H:\C1_GitHub Project\26.06.11 Omniscient AI Quant System
+DB:      data\omniscient_quant.sqlite3
 ```
 
-Main local workspace used so far:
+Codex chat history does not automatically follow the USB drive to another
+computer. The files move, but the conversation may not. Start new sessions by
+reading this file and then `PROJECT_TIMELINE.md`.
+
+## 4. Current Snapshot
 
 ```text
-H:/C1_GitHub Project/26.06.11 Omniscient AI Quant System
+Product completion: about 60%
+Universe:           3,948 active KOSPI/KOSDAQ symbols
+Daily OHLCV:        360,633 rows across 301 symbols
+Prediction rows:    302 rows
+Current model:      predictor_20260615T110948Z
+Model accuracy:     0.5719516609584273
+Model ROC AUC:      0.5514254845336174
+Backend:            FastAPI read API implemented
+Frontend:           React/Vite dashboard implemented and under UI iteration
+Packaging:          not implemented yet
 ```
 
-Important: Codex chat history does not automatically move with a USB drive. The project files can move, but the old conversation may not appear on another device. This file exists to solve that continuity problem.
-
-## 5. Hardware And Runtime Constraints
-
-Main development PC:
-
-- NVIDIA RTX 3070, 8GB VRAM.
-- VRAM overflow prevention is important.
-- Ollama is installed and usable.
-- Current working local model is gemma4:e2b.
-
-Gemma notes:
-
-- gemma4:e4b was tried and failed on RTX 3070 8GB because of VRAM/CUDA memory pressure.
-- gemma4:e2b worked through Ollama.
-- sentiment_analyzer.py sends think:false to Ollama because Gemma 4 returned empty content without it during testing.
-
-Lower-spec PC notes:
-
-- RTX 2060/2060 Super can run the final app if the prediction model is already trained and Gemma is optional or smaller.
-- RTX 3080 10GB plus RTX 2060 Super 6GB cannot simply behave like one 16GB VRAM GPU.
-- Multiple GPUs can run separate workloads, but one model generally must fit on one GPU unless the runtime supports sharding.
-- Intel Core Ultra 7 laptop can run dashboard, SQLite queries, small backfills, and CPU scikit-learn work, but local LLM inference will be slower.
-
-## 6. Files And Responsibilities
+## 5. Main Files
 
 ```text
-README.md                  polished project overview
-PROJECT_STATUS.md          older short status snapshot
-PROJECT_HANDOFF.md         this cross-session handoff file
-.gitignore                 ignores local DB/log/model artifacts
-requirements.txt           Python dependencies
-config.yaml                runtime configuration
-phase1_collector.py        current price, market index, and Naver news collector
-stock_universe.py          KOSPI/KOSDAQ stock universe refresh
-historical_backfill.py     historical OHLCV backfill and on-demand backfill
-backfill_status.py         numeric backfill progress report
-sentiment_analyzer.py      Gemma sentiment analysis through Ollama/LM Studio
-trend_predictor.py         lightweight price-direction predictor
-model_release.py           trains/packages model release ZIPs
-data/                      local SQLite DB, ignored by Git
-logs/                      runtime logs, ignored by Git
-models/                    local model artifacts, ignored by Git
-.deps/                     local dependency folder, ignored by Git
-.venv/                     local venv, ignored by Git
+phase1_collector.py       Naver current price, index, and news collection
+stock_universe.py         KOSPI/KOSDAQ universe refresh
+historical_backfill.py    daily OHLCV backfill
+backfill_status.py        backfill progress/status checks
+sentiment_analyzer.py     local Gemma sentiment analysis
+trend_predictor.py        lightweight prediction training/inference
+model_release.py          model ZIP packaging
+
+backend/app.py            FastAPI routes
+backend/db.py             SQLite access helpers
+backend/schemas.py        API response schemas
+
+frontend/src/App.jsx      React dashboard
+frontend/src/api.js       frontend API client
+frontend/src/styles.css   responsive dashboard styling
+
+run_backend.bat           start local backend
+run_frontend.bat          start local Vite frontend
+build_frontend.bat        build frontend
+check_system.bat          quick local system check
+PROJECT_TIMELINE.md       detailed development history
 ```
 
-## 7. Current Config Snapshot
+## 6. How To Run Locally
 
-Important values from config.yaml:
-
-```yaml
-database.path: data/omniscient_quant.sqlite3
-llm.provider: ollama
-llm.base_url: http://localhost:11434
-llm.model: gemma4:e2b
-prediction.model_path: models/predictor_latest.joblib
-prediction.metadata_path: models/metadata.json
-prediction.horizon_steps: 5
-prediction.min_training_rows: 50
-historical.training_max_symbols: 300
-historical.training_max_pages_per_symbol: 100
-historical.on_demand_max_pages_per_symbol: 100
-historical.sleep_min_seconds: 0.8
-historical.sleep_max_seconds: 1.6
-```
-
-## 8. Current Local DB Status
-
-Measured on 2026-06-15 19:55 KST from data/omniscient_quant.sqlite3.
-
-Backfill status:
+Backend:
 
 ```text
-active_universe          : 3948
-training_target_symbols  : 300
-completed_training       : 298
-partial_training         : 2
-progress_percent         : 99.33%
-symbols_with_ohlcv       : 301
-ohlcv_rows               : 360633
-failed_status            : 0
-latest                   : symbol=027580 status=completed page=100 fetched=1000 inserted=1000 updated=2026-06-12T05:13:30
+run_backend.bat
 ```
 
-The representative 300-symbol sample is effectively complete. The remaining 2 partial symbols appear to have short available Naver history rather than crawler failure.
-
-Known short-history examples:
+Frontend:
 
 ```text
-012210: 747 rows
-014950: 153 rows
+run_frontend.bat
 ```
 
-SQLite tables:
+Expected local URLs:
 
 ```text
-market_index_snapshots
-naver_finance_news
-ohlcv_backfill_status
-ohlcv_daily
-price_snapshots
-sqlite_sequence
-stock_universe
-trend_predictions
+Backend:  http://127.0.0.1:8000
+Frontend: http://127.0.0.1:5173
 ```
 
-Table counts:
+The current Codex PowerShell session may not see Node through `PATH`. If direct
+commands are needed, use:
 
 ```text
-stock_universe          : 3948
-ohlcv_daily             : 360633
-price_snapshots         : 3
-market_index_snapshots  : 2
-naver_finance_news      : 40
-trend_predictions       : 0
-ohlcv_backfill_status   : 296
-sentiment_done          : 1
-ohlcv_date_range        : 2006-02-28 to 2026-06-11
-ohlcv_symbols           : 301
+C:\Program Files\nodejs\node.exe
+C:\Program Files\nodejs\npm.cmd
 ```
 
-Important: data/omniscient_quant.sqlite3 is local only and is not committed to GitHub. Copy it separately when moving to another PC.
-
-## 9. Model Artifact Status
-
-Existing local model artifacts:
+## 7. Current Backend API Surface
 
 ```text
-models/predictor_latest.joblib                                  162972 bytes
-models/metadata.json                                               643 bytes
-models/releases/predictor_20260611T093144Z_manifest.json          1108 bytes
-models/releases/predictor_20260611T093144Z.zip                   72411 bytes
+GET /health
+GET /models/status
+GET /stocks/search
+GET /stocks/{symbol}
+GET /stocks/{symbol}/candles
+GET /stocks/{symbol}/news
+GET /stocks/{symbol}/prediction
+GET /stocks/{symbol}/explanation
+GET /markets/summary
+GET /markets/index-series
+GET /markets/leaders
+GET /markets/signals
+GET /markets/news
 ```
 
-These were generated on 2026-06-11 18:31:46 KST.
+## 8. Current Frontend Behavior
 
-Important: this was only a functional proof package, not the final model release. It was trained before the larger representative sample completed.
+The first screen is a market insight dashboard, not a fixed Samsung Electronics
+page. It shows:
 
-Proof model metadata:
+- market ranking with sortable volume/change controls;
+- KOSPI/KOSDAQ market chart;
+- bullish and bearish expected stock lists;
+- market news banner/cards with links;
+- top metrics for universe, OHLCV rows, signals, and model version.
+
+After a stock search, the UI switches to stock detail mode:
+
+- the left panel becomes a stock summary;
+- the center chart becomes stock candles plus prediction trajectory;
+- the right panel becomes stock news and sentiment;
+- the detailed explanation appears below the main dashboard.
+
+Recent UI work added explicit responsive grid areas, safer chart sizing, better
+portrait/small-screen behavior, and more professional product wording.
+
+## 9. Verification Commands
+
+Frontend build:
 
 ```text
-model_version : predictor_20260611T093144Z
-model_type    : HistGradientBoostingClassifier
-rows          : 32699
-train_rows    : 26159
-test_rows     : 6540
-horizon_steps : 5
-accuracy      : 0.5226299694189602
-roc_auc       : 0.5158903371880934
+cd frontend
+"C:\Program Files\nodejs\npm.cmd" run build
 ```
 
-Next model action: retrain and package a real candidate using the current 360,633-row OHLCV sample.
-
-## 10. Phase Completion
-
-Phase 0 - Repository and docs: 90%
-
-Done:
-
-- workspace initialized,
-- GitHub repo connected,
-- core Python files created,
-- .gitignore configured,
-- README polished,
-- PROJECT_STATUS.md created,
-- PROJECT_HANDOFF.md created.
-
-Remaining:
-
-- local git command is not available in current PowerShell PATH,
-- continue using GitHub connector or install/configure Git CLI later.
-
-Phase 1 - 24/7 collection pipeline: 80%
-
-Done:
-
-- phase1_collector.py implemented,
-- selected stock price/volume collection,
-- KOSPI/KOSDAQ index snapshot collection,
-- Naver Finance news collection,
-- SQLite persistence,
-- repeated scheduler logic.
-
-Remaining:
-
-- add Korea Investment Securities API later,
-- improve market-hours logic,
-- add app-level service controls,
-- add health checks and retry UI.
-
-Phase 1.5 - Universe and historical backfill: 95%
-
-Done:
-
-- KOSPI/KOSDAQ universe refresh,
-- 3,948 active symbols loaded,
-- training sample backfill mode,
-- on-demand backfill mode,
-- status tracking,
-- random request pacing,
-- representative sample effectively complete.
-
-Remaining:
-
-- refresh universe again if market_rank is stale,
-- strengthen against Naver HTML changes,
-- expose on-demand progress in UI.
-
-Phase 2 - Gemma sentiment engine: 60%
-
-Done:
-
-- sentiment_analyzer.py implemented,
-- Ollama/LM Studio API integration,
-- gemma4:e2b selected,
-- one real sentiment row processed,
-- think:false handling added.
-
-Remaining:
-
-- batch analyze collected news,
-- add queue/state handling,
-- add Ollama missing-model fallback,
-- improve prompt and response validation.
-
-Phase 3 - Trend prediction: 65%
-
-Done:
-
-- trend_predictor.py implemented,
-- OHLCV, volume, volatility, moving-average, sentiment, and market-code features,
-- scikit-learn model training,
-- model metadata saving,
-- model_release.py packaging.
-
-Remaining:
-
-- retrain on 360,633-row sample,
-- add time-series validation,
-- add probability calibration checks,
-- write predictions into trend_predictions,
-- integrate with backend.
-
-Phase 4 - Backend API: 0%
-
-Planned:
-
-- FastAPI backend,
-- health endpoint,
-- stock search,
-- candles,
-- news,
-- sentiment,
-- prediction,
-- model status,
-- on-demand backfill endpoints.
-
-Phase 5 - Dashboard UI: 0%
-
-Planned:
-
-- React or Vue frontend,
-- Korean market color rule: red for rise/good news, blue for fall/bad news,
-- left market-leader panel,
-- top search/macro panel,
-- right news/sentiment panel,
-- center candle chart and dotted prediction path,
-- bottom AI opinion and expected return panel.
-
-Phase 6 - EXE packaging: 0%
-
-Planned:
-
-- Electron or PyInstaller-based desktop app,
-- users launch an EXE only,
-- local service startup hidden from user,
-- DB/model/Ollama checks,
-- degraded mode if Gemma is unavailable.
-
-Phase 7 - Release/update system: 10%
-
-Done:
-
-- local model ZIP packaging exists.
-
-Remaining:
-
-- GitHub Release upload script/workflow,
-- model manifest version checks,
-- app-side model download/update.
-
-## 11. Timeline
-
-2026-06-11:
-
-- Started from GitHub repo direction.
-- Implemented Phase 1 Naver Finance current-price/news collection and SQLite persistence.
-- Added KOSPI/KOSDAQ index collection.
-- Added config and dependencies.
-- Confirmed final app must not require terminal commands from users.
-- Decided Gemma should not be fine-tuned.
-- Decided Gemma should score news sentiment only.
-- Added sentiment_analyzer.py.
-- Added trend_predictor.py.
-- Added model_release.py.
-- Added stock universe collection and historical backfill.
-- Changed data strategy from full-market deep crawl to representative sample plus on-demand symbol backfill.
-- Started sample backfill.
-
-2026-06-12:
-
-- Backfill progressed overnight.
-- Observed approximate milestones: 56.33%, 77%, 80.67%, 91%, 97%, then 99.33%.
-- Latest completed symbol recorded around 2026-06-12 05:13 KST.
-- Remaining 2 partial symbols identified as short-history cases.
-- README was polished.
-- PROJECT_STATUS.md was created.
-
-2026-06-15:
-
-- User identified cross-device continuity problem: USB project files move, but Codex chat/session does not reliably move.
-- Verified current DB status.
-- Created detailed PROJECT_HANDOFF.md.
-- Updated local README to point to PROJECT_HANDOFF.md.
-- Updated local PROJECT_STATUS.md to point to PROJECT_HANDOFF.md.
-
-## 12. Commands For Future Agents
-
-Run from the project root.
-
-Check backfill status:
-
-```powershell
-$env:PYTHONPATH='.deps'
-python backfill_status.py --config config.yaml
-```
-
-Train and package the next real model candidate:
-
-```powershell
-$env:PYTHONPATH='.deps'
-$env:PYTHONIOENCODING='utf-8'
-$env:LOKY_MAX_CPU_COUNT='8'
-python model_release.py --config config.yaml
-```
-
-Run on-demand backfill for a searched stock:
-
-```powershell
-$env:PYTHONPATH='.deps'
-python historical_backfill.py --symbol 005930 --on-demand --config config.yaml
-```
-
-Run one sentiment pass:
-
-```powershell
-$env:PYTHONPATH='.deps'
-python sentiment_analyzer.py --once --config config.yaml
-```
-
-Run prediction training directly:
-
-```powershell
-$env:PYTHONPATH='.deps'
-$env:PYTHONIOENCODING='utf-8'
-$env:LOKY_MAX_CPU_COUNT='8'
-python trend_predictor.py --train --config config.yaml
-```
-
-Do not restart the all-symbol deep backfill unless the user explicitly asks. The current strategy is representative training plus on-demand searched-symbol backfill.
-
-## 13. Immediate Next Work
-
-The next engineering step should be:
-
-1. Treat the representative OHLCV sample as complete.
-2. Train and package the first real model release candidate using model_release.py.
-3. Inspect models/metadata.json after training.
-4. Decide whether baseline metrics are acceptable for the first app integration.
-5. Start the FastAPI backend layer.
-
-Recommended next command:
-
-```powershell
-$env:PYTHONPATH='.deps'
-$env:PYTHONIOENCODING='utf-8'
-$env:LOKY_MAX_CPU_COUNT='8'
-python model_release.py --config config.yaml
-```
-
-## 14. Cross-Device Handoff Rules
-
-When moving to another PC:
-
-1. Clone the GitHub repo or copy the whole USB project folder.
-2. If using existing collected data, also copy data/omniscient_quant.sqlite3.
-3. If using existing local models, also copy models/.
-4. Open the project folder directly in Codex.
-5. Read PROJECT_HANDOFF.md first.
-6. Run backfill_status.py to verify local DB state.
-7. Do not run two devices writing to the same SQLite DB at the same time.
-
-## 15. API Key Status
-
-No API key is required for the current Naver-based prototype.
-
-Possible future keys for a production-grade source:
+Backend syntax check:
 
 ```text
-KIS_APP_KEY
-KIS_APP_SECRET
-KIS_ACCOUNT_NO
+python -m py_compile backend\app.py backend\db.py backend\schemas.py
 ```
 
-Do not hardcode API keys. Use .env or OS environment variables.
+System check:
 
-## 16. Known Risks
+```text
+check_system.bat
+```
 
-Naver crawling risk:
+Known issue: Vite/esbuild may fail inside the Codex sandbox with `spawn EPERM`.
+If that happens, rerun the same build with approved permissions.
 
-- Naver can block requests or change HTML selectors.
-- Current sample/on-demand strategy reduces risk but is not equivalent to an official API.
+## 10. Known Limitations
 
-Data quality risk:
+- Current OHLCV data is daily, not true 10-minute intraday data.
+- The 10-minute chart control must remain disabled until intraday collection is implemented.
+- Naver crawling can be blocked or break if HTML changes.
+- Current model is a baseline, not evidence of profitable trading.
+- News sentiment coverage is still very small.
+- EXE packaging and automatic model update flow are not implemented.
+- Git may not be available in PowerShell `PATH`; use GitHub connector or install/configure Git CLI when needed.
 
-- The representative sample is suitable for a baseline, not a final trading-grade system.
+## 11. Do Not Do
 
-Model risk:
+- Do not restart full-market crawling unless the user explicitly asks.
+- Do not commit `data/`, `logs/`, `models/`, `.deps/`, `.venv/`, `frontend/node_modules/`, or `frontend/dist/`.
+- Do not delete local SQLite DB or model artifacts.
+- Do not hardcode API keys.
+- Do not fine-tune Gemma.
+- Do not claim real-time 10-minute behavior until intraday data exists.
 
-- The proof model showed weak metrics, around 52.26% accuracy and 51.59% ROC AUC.
-- This is a baseline, not evidence of profitable prediction.
+## 12. Next Recommended Work
 
-LLM availability risk:
+1. Browser-test the responsive frontend at desktop, narrow desktop, portrait, and mobile widths.
+2. Add loading and empty states that look intentional.
+3. Add real intraday OHLCV collection and API endpoints.
+4. Add market-hours-aware refresh logic.
+5. Improve prediction explanation quality and calibration.
+6. Start packaging architecture: Electron shell plus PyInstaller backend service.
+7. Add GitHub Release model updater.
 
-- Final app must handle missing Ollama, missing model, insufficient VRAM, stopped API, and malformed LLM output.
+## 13. Update Rule
 
-Cross-device risk:
+After meaningful work:
 
-- GitHub does not contain local DB/model artifacts. Copy them separately or regenerate them.
-
-## 17. Rules For Future AI Agents
-
-- Read this file first.
-- Do not assume chat history exists.
-- Do not restart full-market crawling unless explicitly requested.
-- Do not commit data/, logs/, or models/.
-- Do not delete local DB or model artifacts.
-- Prefer phase-scoped changes.
-- Verify DB status before reporting progress percentages.
-- Respect Korean market colors in UI: red for 상승/호재 and blue for 하락/악재.
-- Keep the final user experience command-free.
-- Ask for API keys only when a real API integration requires them.
-
-## 18. Update Procedure
-
-After every meaningful work session, update this file with:
-
-- timestamp,
-- files changed,
-- commands run,
-- DB/model counts if relevant,
-- phase completion changes,
-- what remains,
-- exact next recommended action.
-
-This file replaces unavailable chat history. Keep it accurate enough that a new AI agent can continue without asking the user to restate the project.
+1. update this file only if the operational state changed;
+2. update `PROJECT_TIMELINE.md` for detailed history, errors, results, and improvements;
+3. keep this handoff short enough for a new AI agent to read quickly.
