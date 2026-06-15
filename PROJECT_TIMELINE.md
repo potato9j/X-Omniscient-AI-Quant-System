@@ -2,7 +2,7 @@
 
 This document records the detailed development history of the Omniscient AI Quant System. It is intentionally more granular than `PROJECT_HANDOFF.md` so future reviewers can understand how the project evolved, what failed, and why design or engineering decisions were made.
 
-Last updated: 2026-06-16 00:26 KST
+Last updated: 2026-06-16 00:37 KST
 
 ## Reading Guide
 
@@ -236,6 +236,18 @@ Last updated: 2026-06-16 00:26 KST
 | Build result | `npm run build` passed after the frontend change. |
 | Improvement | A slow backend start or first failed API call now causes a controlled loading/retry state instead of a misleading zero-data screen. |
 
+### v0.6.6 - Local Dev CORS Port Fix
+
+| Field | Details |
+| --- | --- |
+| Date | 2026-06-16 |
+| Goal | Fix browser-side API blocking when Vite runs on a port other than 5173. |
+| Problem | The user still saw `Failed to fetch`, and Chrome DevTools showed CORS errors from origin `http://127.0.0.1:5179` to backend `http://127.0.0.1:8000`. The backend only allowed `5173`, while Vite moved to `5179` because another dev server was already using `5173`. |
+| Work | Added FastAPI CORS `allow_origin_regex` for local `127.0.0.1` and `localhost` ports. Restarted the backend so the new CORS middleware config applied. |
+| Files | `backend/app.py` |
+| Verification | `curl -i -H "Origin: http://127.0.0.1:5179" http://127.0.0.1:8000/health` returned `access-control-allow-origin: http://127.0.0.1:5179`. Browser verification on `http://127.0.0.1:5179/` showed universe `3,948`, OHLCV `360,633`, signals `302`, 30 ranking rows, 12 news cards, sentiment `2/40`, and no browser error logs. |
+| Improvement | The dashboard now works even if Vite chooses 5174, 5179, or another local dev port. |
+
 ## Error Log
 
 | Date | Error | Cause | Resolution |
@@ -254,6 +266,7 @@ Last updated: 2026-06-16 00:26 KST
 | 2026-06-16 | Dashboard did not visibly apply news sentiment | Analyzer existed as a separate script but was not connected to the API/frontend workflow | Added sentiment status/trigger APIs and a frontend analysis action |
 | 2026-06-16 | Backend verification appeared stuck on `uvicorn` | Direct server command is long-running by design and was started on temporary port 8001 | Switched runtime verification back to `run_backend.bat` on port 8000 |
 | 2026-06-16 | Dashboard appeared as zero-data / `Failed to fetch` | Frontend loaded before API data was ready and had no boot retry/loading state | Added initial API retry and explicit loading labels |
+| 2026-06-16 | CORS blocked API despite backend returning 200 | Vite was running on `127.0.0.1:5179`, but backend CORS only allowed `5173` | Added local dev port CORS regex and restarted backend |
 
 ## Design Decision Log
 
