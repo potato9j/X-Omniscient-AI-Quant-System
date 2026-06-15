@@ -1,6 +1,6 @@
 # Omniscient AI Quant System - AI Agent Handoff
 
-Last updated: 2026-06-16 00:26 KST
+Last updated: 2026-06-16 00:37 KST
 
 This is the short operational handoff for continuing the project from any Codex
 session, USB drive, laptop, or desktop. It should stay concise. For detailed
@@ -163,7 +163,8 @@ Recent UI work added explicit responsive grid areas, safer chart sizing, better
 portrait/small-screen behavior, more professional product wording, and a manual
 Gemma sentiment trigger for pending news rows. The frontend now shows loading
 states and retries initial API bootstrapping so a slow backend start does not
-look like a broken zero-data screen.
+look like a broken zero-data screen. Backend CORS allows local `127.0.0.1` and
+`localhost` dev ports because Vite may move from 5173 to another available port.
 
 ## 9. Verification Commands
 
