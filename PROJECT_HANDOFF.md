@@ -1,6 +1,6 @@
 # Omniscient AI Quant System - AI Agent Handoff
 
-Last updated: 2026-06-15 23:35 KST
+Last updated: 2026-06-16 00:17 KST
 
 This is the short operational handoff for continuing the project from any Codex
 session, USB drive, laptop, or desktop. It should stay concise. For detailed
@@ -136,6 +136,8 @@ GET /markets/index-series
 GET /markets/leaders
 GET /markets/signals
 GET /markets/news
+GET /sentiment/status
+POST /sentiment/analyze
 ```
 
 ## 8. Current Frontend Behavior
@@ -147,6 +149,7 @@ page. It shows:
 - KOSPI/KOSDAQ market chart;
 - bullish and bearish expected stock lists;
 - market news banner/cards with links;
+- a Gemma sentiment analysis action and analyzed/total news counter;
 - top metrics for universe, OHLCV rows, signals, and model version.
 
 After a stock search, the UI switches to stock detail mode:
@@ -157,7 +160,8 @@ After a stock search, the UI switches to stock detail mode:
 - the detailed explanation appears below the main dashboard.
 
 Recent UI work added explicit responsive grid areas, safer chart sizing, better
-portrait/small-screen behavior, and more professional product wording.
+portrait/small-screen behavior, more professional product wording, and a manual
+Gemma sentiment trigger for pending news rows.
 
 ## 9. Verification Commands
 
