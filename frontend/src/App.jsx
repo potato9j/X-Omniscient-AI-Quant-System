@@ -56,6 +56,12 @@ function nextTradeTime(dateText, steps) {
   return date.toISOString().slice(0, 10);
 }
 
+function delay(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 function Metric({ icon: Icon, label, value }) {
   return (
     <div className="metric">
@@ -189,9 +195,9 @@ function CandleChart({ candles, prediction }) {
   return <div className="chart-canvas" ref={containerRef} />;
 }
 
-function NewsList({ news, compact = false }) {
+function NewsList({ news, compact = false, loading = false }) {
   if (!news.length) {
-    return <div className="empty-state">표시할 뉴스 없음</div>;
+    return <div className="empty-state">{loading ? "뉴스 불러오는 중" : "표시할 뉴스 없음"}</div>;
   }
   return (
     <div className={compact ? "news-banner-list" : "news-list"}>
@@ -213,9 +219,9 @@ function NewsList({ news, compact = false }) {
   );
 }
 
-function LeaderTable({ rows, onSelect }) {
+function LeaderTable({ rows, onSelect, loading = false }) {
   if (!rows.length) {
-    return <div className="empty-state">랭킹 데이터 없음</div>;
+    return <div className="empty-state">{loading ? "랭킹 불러오는 중" : "랭킹 데이터 없음"}</div>;
   }
   return (
     <div className="leader-list">
@@ -241,11 +247,12 @@ function LeaderTable({ rows, onSelect }) {
   );
 }
 
-function SignalList({ title, rows, direction, onSelect }) {
+function SignalList({ title, rows, direction, onSelect, loading = false }) {
   const tone = direction === "up" ? "up-text" : "down-text";
   return (
     <section className="signal-column">
       <h3>{title}</h3>
+      {!rows.length && loading ? <div className="empty-state compact">신호 계산 중</div> : null}
       {rows.map((item) => (
         <button className="signal-row" key={`${direction}-${item.symbol}`} onClick={() => onSelect(item)} type="button">
           <span>
@@ -324,6 +331,7 @@ function App() {
   const [explanation, setExplanation] = useState(null);
   const [sentimentStatus, setSentimentStatus] = useState(null);
   const [sentimentNotice, setSentimentNotice] = useState("");
+  const [booting, setBooting] = useState(true);
   const [error, setError] = useState("");
 
   const opinion = useMemo(() => {
@@ -391,15 +399,40 @@ function App() {
   }
 
   useEffect(() => {
+    let cancelled = false;
+
     async function boot() {
-      try {
-        setError("");
-        await loadMarket();
-      } catch (bootError) {
-        setError(bootError.message);
+      setBooting(true);
+      for (let attempt = 1; attempt <= 8; attempt += 1) {
+        try {
+          setError(attempt === 1 ? "" : "API 연결 재시도 중");
+          await loadMarket();
+          if (cancelled) {
+            return;
+          }
+          setError("");
+          setBooting(false);
+          return;
+        } catch (bootError) {
+          if (cancelled) {
+            return;
+          }
+          if (attempt === 8) {
+            setError(bootError.message);
+            setBooting(false);
+            return;
+          }
+          setError(`API 연결 대기 · ${bootError.message}`);
+          await delay(2000);
+        }
       }
     }
+
     boot();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -490,7 +523,15 @@ function App() {
             <div className="brand-mark">OX</div>
             <div>
               <h1>Omniscient Quant</h1>
-            <p>{error ? `API 오류 · ${error}` : view === "market" ? "시장 인사이트" : "종목 리서치"}</p>
+            <p>
+              {booting
+                ? error || "데이터 동기화 중"
+                : error
+                  ? `API 오류 · ${error}`
+                  : view === "market"
+                    ? "시장 인사이트"
+                    : "종목 리서치"}
+            </p>
             </div>
         </button>
 
@@ -507,13 +548,13 @@ function App() {
         </form>
 
         <div className="metric-strip">
-          <Metric icon={Database} label="Universe" value={formatNumber(health?.stock_count)} />
-          <Metric icon={BarChart3} label="OHLCV" value={formatNumber(health?.ohlcv_rows)} />
-          <Metric icon={Gauge} label="Signals" value={formatNumber(health?.prediction_rows)} />
+          <Metric icon={Database} label="Universe" value={health ? formatNumber(health.stock_count) : booting ? "..." : "0"} />
+          <Metric icon={BarChart3} label="OHLCV" value={health ? formatNumber(health.ohlcv_rows) : booting ? "..." : "0"} />
+          <Metric icon={Gauge} label="Signals" value={health ? formatNumber(health.prediction_rows) : booting ? "..." : "0"} />
           <Metric
             icon={Server}
             label="Model"
-            value={modelStatus?.metadata?.model_version?.replace("predictor_", "") ?? "-"}
+            value={modelStatus?.metadata?.model_version?.replace("predictor_", "") ?? (booting ? "..." : "-")}
           />
         </div>
       </header>
@@ -543,7 +584,7 @@ function App() {
                   </button>
                 </div>
               </div>
-              <LeaderTable onSelect={loadStock} rows={leaders} />
+              <LeaderTable loading={booting} onSelect={loadStock} rows={leaders} />
             </>
           ) : (
             <>
@@ -589,8 +630,8 @@ function App() {
                 <MarketLineChart kosdaq={kosdaqSeries} kospi={kospiSeries} />
               </section>
               <section className="signal-panel">
-                <SignalList direction="up" onSelect={loadStock} rows={bullish} title="호황 예상 종목" />
-                <SignalList direction="down" onSelect={loadStock} rows={bearish} title="불황 예상 종목" />
+                <SignalList direction="up" loading={booting} onSelect={loadStock} rows={bullish} title="호황 예상 종목" />
+                <SignalList direction="down" loading={booting} onSelect={loadStock} rows={bearish} title="불황 예상 종목" />
               </section>
             </>
           ) : (
@@ -655,7 +696,9 @@ function App() {
               <span>
                 {sentimentStatus
                   ? `${sentimentStatus.analyzed_news}/${sentimentStatus.total_news}`
-                  : visibleNews.length}
+                  : booting
+                    ? "..."
+                    : visibleNews.length}
               </span>
             </div>
           </div>
@@ -664,7 +707,7 @@ function App() {
               {sentimentStatus?.last_error || sentimentNotice}
             </div>
           ) : null}
-          <NewsList compact={view === "market"} news={visibleNews} />
+          <NewsList compact={view === "market"} loading={booting} news={visibleNews} />
         </aside>
       </main>
 
