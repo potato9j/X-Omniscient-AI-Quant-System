@@ -4,6 +4,8 @@ Last updated: 2026-06-12 KST
 
 This file is the handoff document for continuing the project from another PC, USB drive, or Codex workspace. Read this before starting new work.
 
+For the full cross-session handoff, read [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) first. This file is now a shorter status snapshot.
+
 ## Current Direction
 
 The project is a local-first AI quant dashboard for Korean equities.
@@ -75,8 +77,8 @@ The remaining 2 symbols have less than 1,000 available rows from Naver, so the s
 Known short-history symbols:
 
 ```text
-012210    # 747 rows
-014950    # 153 rows
+012210 삼미금속    # 747 rows
+014950 삼익제약    # 153 rows
 ```
 
 ## GitHub Status
@@ -190,5 +192,5 @@ When moving to another PC:
 1. Move the full project folder or clone the repo.
 2. Also move `data/omniscient_quant.sqlite3` if you need the collected data.
 3. Open the folder directly in Codex on that device.
-4. Read this file first.
+4. Read `PROJECT_HANDOFF.md` first.
 5. Do not run two devices writing to the same SQLite DB at the same time.
