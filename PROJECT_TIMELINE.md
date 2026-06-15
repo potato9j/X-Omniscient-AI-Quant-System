@@ -2,7 +2,7 @@
 
 This document records the detailed development history of the Omniscient AI Quant System. It is intentionally more granular than `PROJECT_HANDOFF.md` so future reviewers can understand how the project evolved, what failed, and why design or engineering decisions were made.
 
-Last updated: 2026-06-15 23:40 KST
+Last updated: 2026-06-16 00:17 KST
 
 ## Reading Guide
 
@@ -19,7 +19,7 @@ Last updated: 2026-06-15 23:40 KST
 | Historical OHLCV | 360,633 daily rows across 301 symbols |
 | Training sample | 300-symbol representative sample, effectively complete at 99.33% |
 | News rows | 40 Naver Finance news rows |
-| Sentiment rows | 1 row analyzed by Gemma |
+| Sentiment rows | 2 rows analyzed by Gemma |
 | Prediction rows | 302 latest prediction rows |
 | Current model | `predictor_20260615T110948Z` |
 | Model rows | 359,130 feature rows |
@@ -206,6 +206,23 @@ Last updated: 2026-06-15 23:40 KST
 | Error observed | Raw PowerShell `Get-Content` displayed some Korean JSX strings as mojibake because the source is UTF-8 and the console path was not decoding it correctly. `rg` and Vite build confirmed the source itself was valid. |
 | Improvement | `PROJECT_HANDOFF.md` now stays focused on mission, current state, run commands, API surface, limitations, and next work. This file remains the detailed engineering timeline. |
 
+### v0.6.4 - Gemma Sentiment Trigger Integration
+
+| Field | Details |
+| --- | --- |
+| Date | 2026-06-16 |
+| Goal | Make the dashboard visibly reflect Gemma news sentiment analysis instead of only showing stored scores when they already exist. |
+| Problem | The frontend read `sentiment_score` from `naver_finance_news`, but the app did not start the analyzer or expose sentiment progress. The local DB had 40 news rows but only 1 analyzed row, so most cards showed `미분석`. |
+| Work | Added sentiment status and trigger APIs. Added a frontend `감성 분석` button, analyzed/total counter, background polling, and automatic news refresh after analysis finishes. |
+| Files | `backend/app.py`, `backend/schemas.py`, `frontend/src/api.js`, `frontend/src/App.jsx`, `frontend/src/styles.css`, `run_backend.bat` |
+| Backend endpoints | `GET /sentiment/status`, `POST /sentiment/analyze?limit=...` |
+| Runtime behavior | `POST /sentiment/analyze` starts a background job that calls the existing Gemma/Ollama analyzer for pending news rows. The default UI trigger analyzes up to 5 pending rows per click. |
+| Verification | Ollama was running with `gemma4:e2b`. A 1-row analysis test completed successfully, increasing analyzed news from 1/40 to 2/40. The newly analyzed row received score `0.7` and a Korean summary. |
+| Frontend verification | Browser reload showed the right news panel with `감성 분석`, `2/40`, `0.70`, `-0.30`, and remaining `미분석` cards. |
+| Build result | `npm run build` passed after the frontend changes. Backend `py_compile` passed. |
+| Error observed | Backend was initially checked on temporary port 8001 after an interrupted long-running `uvicorn` command; the frontend expects port 8000. |
+| Improvement | `run_backend.bat` was changed to use `PYTHONPATH=.;.deps` and no `--reload`, making double-click backend startup more stable on port 8000. |
+
 ## Error Log
 
 | Date | Error | Cause | Resolution |
@@ -221,6 +238,8 @@ Last updated: 2026-06-15 23:40 KST
 | 2026-06-15 | Frontend showed `API error 404` | Stale backend process did not include new `/markets/*` endpoints | Stop old backend process and restart `run_backend.bat` |
 | 2026-06-15 | UI panels overlapped and resized poorly | Flexible grid without explicit layout areas and sticky panels in constrained widths | Reworked CSS with named grid areas and responsive breakpoints |
 | 2026-06-15 | PowerShell displayed Korean JSX text as mojibake | UTF-8 source was read through a non-UTF-8 console path | Treat `rg`, browser output, and Vite build as authoritative unless the browser also shows broken text |
+| 2026-06-16 | Dashboard did not visibly apply news sentiment | Analyzer existed as a separate script but was not connected to the API/frontend workflow | Added sentiment status/trigger APIs and a frontend analysis action |
+| 2026-06-16 | Backend verification appeared stuck on `uvicorn` | Direct server command is long-running by design and was started on temporary port 8001 | Switched runtime verification back to `run_backend.bat` on port 8000 |
 
 ## Design Decision Log
 
@@ -236,6 +255,7 @@ Last updated: 2026-06-15 23:40 KST
 | 2026-06-15 | Separate market landing screen from stock detail screen | First launch should help users orient to the market, not force a single stock |
 | 2026-06-15 | Disable 10-minute chart control for now | Current DB has daily OHLCV, not true 10-minute candles |
 | 2026-06-15 | Keep `PROJECT_HANDOFF.md` short and move detailed history to `PROJECT_TIMELINE.md` | New AI agents need a fast operational entry point, while the user wants a complete learning record |
+| 2026-06-16 | Use a manual sentiment trigger before full automation | It gives immediate user-visible control without running Gemma continuously in the first dashboard version |
 
 ## Next Engineering Targets
 
