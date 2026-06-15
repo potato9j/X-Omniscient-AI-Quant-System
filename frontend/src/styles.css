@@ -257,6 +257,44 @@ button {
   font-size: 12px;
 }
 
+.news-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.mini-button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mini-button:disabled {
+  background: var(--surface-3);
+  color: var(--muted-2);
+  cursor: not-allowed;
+}
+
+.sentiment-status-line {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.sentiment-status-line.bad {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
 .segmented {
   width: 100%;
   display: grid;
