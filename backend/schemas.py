@@ -104,3 +104,23 @@ class ModelStatus(BaseModel):
     metadata_path: str
     metadata: dict[str, Any] | None = None
     release_packages: list[dict[str, Any]]
+
+
+class SentimentStatus(BaseModel):
+    total_news: int
+    analyzed_news: int
+    pending_news: int
+    provider: str
+    model: str
+    job_status: str
+    last_started_at: str | None = None
+    last_finished_at: str | None = None
+    last_analyzed_count: int = 0
+    last_error: str | None = None
+
+
+class SentimentAnalyzeResponse(BaseModel):
+    status: str
+    accepted: bool
+    pending_news: int
+    message: str
