@@ -59,3 +59,17 @@ export function getMarketNews(limit = 12) {
 export function getPredictionExplanation(symbol) {
   return getJson(`/stocks/${symbol}/explanation`);
 }
+
+export function getSentimentStatus() {
+  return getJson("/sentiment/status");
+}
+
+export async function startSentimentAnalysis(limit = 5) {
+  const response = await fetch(`${API_BASE}/sentiment/analyze?limit=${limit}`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
