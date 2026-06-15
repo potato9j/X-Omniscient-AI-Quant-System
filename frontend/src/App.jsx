@@ -26,7 +26,9 @@ import {
   getNews,
   getPrediction,
   getPredictionExplanation,
+  getSentimentStatus,
   searchStocks,
+  startSentimentAnalysis,
 } from "./api";
 
 function formatNumber(value) {
@@ -320,6 +322,8 @@ function App() {
   const [stockNews, setStockNews] = useState([]);
   const [prediction, setPrediction] = useState(null);
   const [explanation, setExplanation] = useState(null);
+  const [sentimentStatus, setSentimentStatus] = useState(null);
+  const [sentimentNotice, setSentimentNotice] = useState("");
   const [error, setError] = useState("");
 
   const opinion = useMemo(() => {
@@ -333,7 +337,18 @@ function App() {
   }, [prediction]);
 
   async function loadMarket(sort = leaderSort, order = leaderOrder) {
-    const [healthData, modelData, summaryData, kospiData, kosdaqData, leaderData, bullishData, bearishData, newsData] =
+    const [
+      healthData,
+      modelData,
+      summaryData,
+      kospiData,
+      kosdaqData,
+      leaderData,
+      bullishData,
+      bearishData,
+      newsData,
+      sentimentData,
+    ] =
       await Promise.all([
         getHealth(),
         getModelStatus(),
@@ -344,6 +359,7 @@ function App() {
         getMarketSignals("up", 10),
         getMarketSignals("down", 10),
         getMarketNews(12),
+        getSentimentStatus(),
       ]);
     setHealth(healthData);
     setModelStatus(modelData);
@@ -354,6 +370,7 @@ function App() {
     setBullish(bullishData);
     setBearish(bearishData);
     setMarketNews(newsData);
+    setSentimentStatus(sentimentData);
   }
 
   async function loadStock(stock) {
@@ -370,6 +387,7 @@ function App() {
     setStockNews(newsRows);
     setPrediction(predictionRow);
     setExplanation(explanationRow);
+    setSentimentStatus(await getSentimentStatus());
   }
 
   useEffect(() => {
@@ -417,8 +435,53 @@ function App() {
     }
   }
 
+  async function handleAnalyzeSentiment() {
+    try {
+      setError("");
+      setSentimentNotice("");
+      const response = await startSentimentAnalysis(5);
+      setSentimentNotice(response.message);
+      setSentimentStatus(await getSentimentStatus());
+    } catch (sentimentError) {
+      setError(sentimentError.message);
+    }
+  }
+
+  useEffect(() => {
+    const status = sentimentStatus?.job_status;
+    if (status !== "queued" && status !== "running") {
+      return undefined;
+    }
+
+    const timer = window.setInterval(async () => {
+      try {
+        const nextStatus = await getSentimentStatus();
+        setSentimentStatus(nextStatus);
+        if (nextStatus.job_status !== "queued" && nextStatus.job_status !== "running") {
+          if (view === "stock" && selected?.symbol) {
+            setStockNews(await getNews(selected.symbol, 30));
+          } else {
+            setMarketNews(await getMarketNews(12));
+          }
+          setSentimentNotice(
+            nextStatus.last_error
+              ? "감성 분석 실패"
+              : `감성 분석 완료 · ${nextStatus.last_analyzed_count}건`,
+          );
+        }
+      } catch (pollError) {
+        setError(pollError.message);
+      }
+    }, 4000);
+
+    return () => window.clearInterval(timer);
+  }, [sentimentStatus?.job_status, selected?.symbol, view]);
+
   const DirectionIcon = opinion.icon;
   const visibleNews = view === "stock" ? stockNews : marketNews;
+  const sentimentJobActive =
+    sentimentStatus?.job_status === "queued" || sentimentStatus?.job_status === "running";
+  const sentimentPending = sentimentStatus?.pending_news ?? 0;
 
   return (
     <div className="app-shell">
@@ -580,8 +643,27 @@ function App() {
               <Newspaper size={16} />
               {view === "market" ? "시장 뉴스" : "뉴스 감성"}
             </h2>
-            <span>{visibleNews.length}</span>
+            <div className="news-actions">
+              <button
+                className="mini-button"
+                disabled={sentimentJobActive || sentimentPending <= 0}
+                onClick={handleAnalyzeSentiment}
+                type="button"
+              >
+                {sentimentJobActive ? "분석 중" : "감성 분석"}
+              </button>
+              <span>
+                {sentimentStatus
+                  ? `${sentimentStatus.analyzed_news}/${sentimentStatus.total_news}`
+                  : visibleNews.length}
+              </span>
+            </div>
           </div>
+          {sentimentNotice || sentimentStatus?.last_error ? (
+            <div className={`sentiment-status-line ${sentimentStatus?.last_error ? "bad" : ""}`}>
+              {sentimentStatus?.last_error || sentimentNotice}
+            </div>
+          ) : null}
           <NewsList compact={view === "market"} news={visibleNews} />
         </aside>
       </main>
