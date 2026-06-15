@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-15 KST
+Last updated: 2026-06-16 00:17 KST
 
 This is a short status snapshot. For operational continuation, read
 [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md). For detailed development history,
@@ -26,6 +26,7 @@ Core strategy:
 Universe:           3,948 active KOSPI/KOSDAQ symbols
 Daily OHLCV:        360,633 rows across 301 symbols
 Prediction rows:    302 rows
+News sentiment:     2 analyzed rows out of 40 news rows
 Current model:      predictor_20260615T110948Z
 Model accuracy:     0.5719516609584273
 Model ROC AUC:      0.5514254845336174
@@ -44,6 +45,7 @@ Packaging:          not implemented yet
 - FastAPI backend read API.
 - React/Vite dashboard with market landing and stock detail modes.
 - Responsive UI pass for desktop, narrow, and portrait viewports.
+- Manual Gemma sentiment trigger and progress counter in the dashboard.
 
 ## Local Artifacts Not Committed
 
@@ -91,7 +93,8 @@ check_system.bat
 
 1. Add real intraday OHLCV collection.
 2. Add market-hours-aware refresh logic.
-3. Improve prediction validation and calibration.
-4. Improve loading and empty UI states.
-5. Start EXE packaging architecture with Electron plus a Python backend launcher.
-6. Add GitHub Release model updater.
+3. Convert manual sentiment analysis into a managed background worker for the final EXE.
+4. Improve prediction validation and calibration.
+5. Improve loading and empty UI states.
+6. Start EXE packaging architecture with Electron plus a Python backend launcher.
+7. Add GitHub Release model updater.
