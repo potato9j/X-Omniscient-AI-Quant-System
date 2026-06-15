@@ -2,7 +2,7 @@
 
 This document records the detailed development history of the Omniscient AI Quant System. It is intentionally more granular than `PROJECT_HANDOFF.md` so future reviewers can understand how the project evolved, what failed, and why design or engineering decisions were made.
 
-Last updated: 2026-06-16 00:37 KST
+Last updated: 2026-06-16 00:56 KST
 
 ## Reading Guide
 
@@ -248,6 +248,18 @@ Last updated: 2026-06-16 00:37 KST
 | Verification | `curl -i -H "Origin: http://127.0.0.1:5179" http://127.0.0.1:8000/health` returned `access-control-allow-origin: http://127.0.0.1:5179`. Browser verification on `http://127.0.0.1:5179/` showed universe `3,948`, OHLCV `360,633`, signals `302`, 30 ranking rows, 12 news cards, sentiment `2/40`, and no browser error logs. |
 | Improvement | The dashboard now works even if Vite chooses 5174, 5179, or another local dev port. |
 
+### v0.6.7 - Read-Only Market Data API Scope Decision
+
+| Field | Details |
+| --- | --- |
+| Date | 2026-06-16 |
+| Goal | Fix the product boundary before adding external securities APIs. |
+| Decision | Korea Investment & Securities Open API, or any other securities API, will be used only for read-only market data: quotes, indices, daily candles, intraday candles, volume, turnover, and other non-order market data. |
+| Explicit exclusion | The product will not include buy orders, sell orders, order modification, order cancellation, automated trading, account-balance-based order recommendation, or automatic portfolio rebalancing execution. |
+| Reason | The user wants a released app that provides market data, sentiment analysis, direction prediction, expected return, and target-price estimation without legal or product risk from trade execution features. |
+| Implementation impact | Future API work should start with read-only quote/index/intraday endpoints, local token handling, `.env`-style secrets, and `ohlcv_intraday` storage. Do not design order tables, order APIs, account-balance workflows, or trading UI. |
+| Prediction impact | Intraday API data is needed to improve short-horizon movement analysis and to support expected-return/target-price regression instead of drawing a hardcoded forecast line. |
+
 ## Error Log
 
 | Date | Error | Cause | Resolution |
@@ -283,26 +295,40 @@ Last updated: 2026-06-16 00:37 KST
 | 2026-06-15 | Disable 10-minute chart control for now | Current DB has daily OHLCV, not true 10-minute candles |
 | 2026-06-15 | Keep `PROJECT_HANDOFF.md` short and move detailed history to `PROJECT_TIMELINE.md` | New AI agents need a fast operational entry point, while the user wants a complete learning record |
 | 2026-06-16 | Use a manual sentiment trigger before full automation | It gives immediate user-visible control without running Gemma continuously in the first dashboard version |
+| 2026-06-16 | Keep the product read-only with no real-trading features | Reduces legal/product risk and keeps the app focused on analysis, prediction, and reporting |
+| 2026-06-16 | Use securities API only for market data | Intraday quotes/candles improve prediction quality without requiring account/order workflows |
 
 ## Next Engineering Targets
 
-1. Add real intraday collection:
+1. Add read-only Korea Investment & Securities API integration:
+   - app key/app secret loading from local-only config.
+   - token caching.
+   - current quote lookup.
+   - KOSPI/KOSDAQ index lookup.
+   - intraday candle lookup when supported.
+   - no order, cancel, modify, balance, or account trading endpoints.
+2. Add real intraday collection:
    - 1-minute or 10-minute OHLCV table.
    - Market-hours-aware scheduler.
    - API endpoint for intraday candles.
-2. Improve market screen:
+3. Add expected-return and target-price prediction:
+   - future return labels.
+   - target price.
+   - lower/upper prediction range.
+   - chart forecast line based on model output, not a hardcoded percentage.
+4. Improve market screen:
    - True sector/industry grouping.
    - Macro indicators.
    - Real market-wide economic news feeds.
-3. Improve model validation:
+5. Improve model validation:
    - Walk-forward validation.
    - Calibration checks.
    - Separate daily/intraday model horizons.
-4. Improve packaging:
+6. Improve packaging:
    - Electron shell.
    - Python backend launcher.
    - GitHub Release model updater.
-5. Improve UI quality:
+7. Improve UI quality:
    - Browser screenshot verification at desktop, tablet/portrait, and narrow widths.
    - Better empty/loading states.
    - Reduce any remaining text overflow.
