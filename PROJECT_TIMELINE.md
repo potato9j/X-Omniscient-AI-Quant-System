@@ -294,7 +294,7 @@ Last updated: 2026-06-16 00:56 KST
 | 2026-06-15 | Separate market landing screen from stock detail screen | First launch should help users orient to the market, not force a single stock |
 | 2026-06-15 | Disable 10-minute chart control for now | Current DB has daily OHLCV, not true 10-minute candles |
 | 2026-06-15 | Keep `PROJECT_HANDOFF.md` short and move detailed history to `PROJECT_TIMELINE.md` | New AI agents need a fast operational entry point, while the user wants a complete learning record |
-| 2026-06-16 | Use a manual sentiment trigger before full automation | It gives immediate user-visible control without running Gemma continuously in the first dashboard version |
+| 2026-06-15 | Use a manual sentiment trigger before full automation | It gives immediate user-visible control without running Gemma continuously in the first dashboard version |
 | 2026-06-16 | Keep the product read-only with no real-trading features | Reduces legal/product risk and keeps the app focused on analysis, prediction, and reporting |
 | 2026-06-16 | Use securities API only for market data | Intraday quotes/candles improve prediction quality without requiring account/order workflows |
 
