@@ -264,39 +264,39 @@ Last updated: 2026-06-16 00:56 KST
 
 | Date | Error | Cause | Resolution |
 | --- | --- | --- | --- |
-| 2026-06-11 | Larger Gemma model failed on RTX 3070 8GB | VRAM pressure | Use `gemma4:e2b` for local sentiment inference |
-| 2026-06-11 | Gemma returned empty content | Model/runtime behavior with thinking output | Send `think: false` |
-| 2026-06-15 | `PermissionError: [WinError 5]` during model training | scikit-learn/joblib thread pool creation in Windows sandbox | Limit thread counts to 1 |
-| 2026-06-15 | `ModuleNotFoundError: fastapi` | Backend dependency missing from `.deps` | Install FastAPI and add to `requirements.txt` |
-| 2026-06-15 | `pip install` could not reach package index | Network restricted by sandbox | Re-run with approved network permission |
-| 2026-06-15 | Starlette `TestClient` required `httpx2` | Newer Starlette dependency requirement | Add and install `httpx2` |
-| 2026-06-15 | PowerShell `Start-Process` failed with `Path/PATH` duplicate | Environment variable casing conflict | Avoid keeping long-running servers attached to Codex; use batch files |
-| 2026-06-15 | Vite build failed with `spawn EPERM` | esbuild worker process blocked by sandbox | Re-run build with approved permissions |
-| 2026-06-15 | Frontend showed `API error 404` | Stale backend process did not include new `/markets/*` endpoints | Stop old backend process and restart `run_backend.bat` |
-| 2026-06-15 | UI panels overlapped and resized poorly | Flexible grid without explicit layout areas and sticky panels in constrained widths | Reworked CSS with named grid areas and responsive breakpoints |
-| 2026-06-15 | PowerShell displayed Korean JSX text as mojibake | UTF-8 source was read through a non-UTF-8 console path | Treat `rg`, browser output, and Vite build as authoritative unless the browser also shows broken text |
-| 2026-06-16 | Dashboard did not visibly apply news sentiment | Analyzer existed as a separate script but was not connected to the API/frontend workflow | Added sentiment status/trigger APIs and a frontend analysis action |
-| 2026-06-16 | Backend verification appeared stuck on `uvicorn` | Direct server command is long-running by design and was started on temporary port 8001 | Switched runtime verification back to `run_backend.bat` on port 8000 |
-| 2026-06-16 | Dashboard appeared as zero-data / `Failed to fetch` | Frontend loaded before API data was ready and had no boot retry/loading state | Added initial API retry and explicit loading labels |
-| 2026-06-16 | CORS blocked API despite backend returning 200 | Vite was running on `127.0.0.1:5179`, but backend CORS only allowed `5173` | Added local dev port CORS regex and restarted backend |
+| 26-06-11 | Larger Gemma model failed on RTX 3070 8GB | VRAM pressure | Use `gemma4:e2b` for local sentiment inference |
+| 26-06-11 | Gemma returned empty content | Model/runtime behavior with thinking output | Send `think: false` |
+| 26-06-15 | `PermissionError: [WinError 5]` during model training | scikit-learn/joblib thread pool creation in Windows sandbox | Limit thread counts to 1 |
+| 26-06-15 | `ModuleNotFoundError: fastapi` | Backend dependency missing from `.deps` | Install FastAPI and add to `requirements.txt` |
+| 26-06-15 | `pip install` could not reach package index | Network restricted by sandbox | Re-run with approved network permission |
+| 26-06-15 | Starlette `TestClient` required `httpx2` | Newer Starlette dependency requirement | Add and install `httpx2` |
+| 26-06-15 | PowerShell `Start-Process` failed with `Path/PATH` duplicate | Environment variable casing conflict | Avoid keeping long-running servers attached to Codex; use batch files |
+| 26-06-15 | Vite build failed with `spawn EPERM` | esbuild worker process blocked by sandbox | Re-run build with approved permissions |
+| 26-06-15 | Frontend showed `API error 404` | Stale backend process did not include new `/markets/*` endpoints | Stop old backend process and restart `run_backend.bat` |
+| 26-06-15 | UI panels overlapped and resized poorly | Flexible grid without explicit layout areas and sticky panels in constrained widths | Reworked CSS with named grid areas and responsive breakpoints |
+| 26-06-15 | PowerShell displayed Korean JSX text as mojibake | UTF-8 source was read through a non-UTF-8 console path | Treat `rg`, browser output, and Vite build as authoritative unless the browser also shows broken text |
+| 26-06-16 | Dashboard did not visibly apply news sentiment | Analyzer existed as a separate script but was not connected to the API/frontend workflow | Added sentiment status/trigger APIs and a frontend analysis action |
+| 26-06-16 | Backend verification appeared stuck on `uvicorn` | Direct server command is long-running by design and was started on temporary port 8001 | Switched runtime verification back to `run_backend.bat` on port 8000 |
+| 26-06-16 | Dashboard appeared as zero-data / `Failed to fetch` | Frontend loaded before API data was ready and had no boot retry/loading state | Added initial API retry and explicit loading labels |
+| 26-06-16 | CORS blocked API despite backend returning 200 | Vite was running on `127.0.0.1:5179`, but backend CORS only allowed `5173` | Added local dev port CORS regex and restarted backend |
 
 ## Design Decision Log
 
 | Date | Decision | Reason |
 | --- | --- | --- |
-| 2026-06-11 | Do not fine-tune Gemma | Fine-tuning is heavy, VRAM-sensitive, and unnecessary for news sentiment scoring |
-| 2026-06-11 | Use Gemma only for sentiment analysis | Keeps local LLM workload bounded |
-| 2026-06-11 | Use lightweight ML for prediction | Better fit for CPU/GPU constraints and frequent retraining |
-| 2026-06-11 | Use representative sample plus on-demand backfill | Avoids long full-market crawling and reduces blocking risk |
-| 2026-06-15 | Use GitHub Releases for model packages | Keeps large binary model artifacts out of normal commits |
-| 2026-06-15 | Use FastAPI as local backend | Simple local API for React/Electron |
-| 2026-06-15 | Use React/Vite and Lightweight Charts | Practical frontend stack for financial dashboard UI |
-| 2026-06-15 | Separate market landing screen from stock detail screen | First launch should help users orient to the market, not force a single stock |
-| 2026-06-15 | Disable 10-minute chart control for now | Current DB has daily OHLCV, not true 10-minute candles |
-| 2026-06-15 | Keep `PROJECT_HANDOFF.md` short and move detailed history to `PROJECT_TIMELINE.md` | New AI agents need a fast operational entry point, while the user wants a complete learning record |
-| 2026-06-15 | Use a manual sentiment trigger before full automation | It gives immediate user-visible control without running Gemma continuously in the first dashboard version |
-| 2026-06-16 | Keep the product read-only with no real-trading features | Reduces legal/product risk and keeps the app focused on analysis, prediction, and reporting |
-| 2026-06-16 | Use securities API only for market data | Intraday quotes/candles improve prediction quality without requiring account/order workflows |
+| 26-06-11 | Do not fine-tune Gemma | Fine-tuning is heavy, VRAM-sensitive, and unnecessary for news sentiment scoring |
+| 26-06-11 | Use Gemma only for sentiment analysis | Keeps local LLM workload bounded |
+| 26-06-11 | Use lightweight ML for prediction | Better fit for CPU/GPU constraints and frequent retraining |
+| 26-06-11 | Use representative sample plus on-demand backfill | Avoids long full-market crawling and reduces blocking risk |
+| 26-06-15 | Use GitHub Releases for model packages | Keeps large binary model artifacts out of normal commits |
+| 26-06-15 | Use FastAPI as local backend | Simple local API for React/Electron |
+| 26-06-15 | Use React/Vite and Lightweight Charts | Practical frontend stack for financial dashboard UI |
+| 26-06-15 | Separate market landing screen from stock detail screen | First launch should help users orient to the market, not force a single stock |
+| 26-06-15 | Disable 10-minute chart control for now | Current DB has daily OHLCV, not true 10-minute candles |
+| 26-06-15 | Keep `PROJECT_HANDOFF.md` short and move detailed history to `PROJECT_TIMELINE.md` | New AI agents need a fast operational entry point, while the user wants a complete learning record |
+| 26-06-15 | Use a manual sentiment trigger before full automation | It gives immediate user-visible control without running Gemma continuously in the first dashboard version |
+| 26-06-16 | Keep the product read-only with no real-trading features | Reduces legal/product risk and keeps the app focused on analysis, prediction, and reporting |
+| 26-06-16 | Use securities API only for market data | Intraday quotes/candles improve prediction quality without requiring account/order workflows |
 
 ## Next Engineering Targets
 
